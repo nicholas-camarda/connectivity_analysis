@@ -1,0 +1,21 @@
+"0","```r
+removing_outliers_df <- remove_bad_days_df %>%
+  
+  mutate(avg_systolic = mean(Systolic),
+            sd_systolic = sd(Systolic)) %>%
+  mutate(outlier = ifelse(abs(Systolic - avg_systolic) >= sd_systolic, T, F)) %>%
+  filter(!outlier)
+
+
+df1 <- removing_outliers_df %>% 
+  summarize(`Average Systolic BP` = mean(Systolic), 
+            new_sd_systolic = sd(Systolic))
+
+ggplot(df1, aes(x = Date, y = `Average Systolic BP`, color = `Specimen Name`)) +
+  geom_point() + 
+  geom_line() + 
+  geom_errorbar(aes(ymin=`Average Systolic BP`-new_sd_systolic, ymax=`Average Systolic BP`+new_sd_systolic), width=.2,
+                 position=position_dodge(0.01))+
+   theme_classic() +
+  ggtitle(\"Tail-cuff measurements of Systolic BP\n\")
+```"

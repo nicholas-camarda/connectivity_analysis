@@ -1,0 +1,11 @@
+"0","```r
+library(tidyverse)
+library(ggstatsplot)
+library(readxl)
+
+#' reads in mega excel file 
+data <- read_excel(\"/Users/Nicholas/OneDrive - Tufts/phd/projects/vegfri/sunitinib/mouse-studies/Tailcuff - sunitinib - 210204.xlsx\",sheet = 1) %>%
+  select(`Specimen Name`, Systolic, Mean, Rate, `Cycle #`, `Date`) %>%
+  mutate(Date = as.Date(Date, \"GMT\")) %>%
+  arrange(Date, `Specimen Name`, `Cycle #`)
+```"
