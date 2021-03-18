@@ -1,9 +1,13 @@
 
+# add keys through github
+# https://kbroman.org/github_tutorial/pages/first_time.html 
+
 winos <- ifelse(grepl("windows", Sys.info()["sysname"], ignore.case = T), 1, 0)
 if (winos == 1) {
   source("C:\\Users\\ncama\\OneDrive - Tufts\\phd\\ws\\scripts\\master-source.R")
 } else {
-  source("/Users/Nicholas/OneDrive - Tufts/phd/ws/scripts/master-source.R")
+  # change to .../phd/ws/proteomics/...
+  source("/Users/Nicholas/OneDrive - Tufts/phd/ws/proteomics/scripts/master-source.R")
 }
 
 my_extract <- function(chr, idx) {
@@ -187,21 +191,24 @@ run_connectivity <- function(corr_lst) {
 
       if (is.null(background)) {
         sub_res <- tibble(
-          statistic = NA, p_val = NA,
+          conn = NA, p_val = NA,
           group_a = g1, group_b = g2,
           test = list(test), background = list(background)
         )
         return(sub_res)
       }
 
-      ks_res <- ks.boot(test, background, nboot = 1000, alternative = "two.sided")
+      ks_res <- ks.boot(test, background,
+        nboot = 1000, alternative = "two.sided"
+      )
+      
       stat <- ks_res$ks$statistic
       if (median(test, na.rm = T) < median(background, na.rm = T)) {
         stat <- -1 * stat
       }
       p_val <- ks_res$ks.boot.pvalue
       sub_res <- tibble(
-        statistic = stat, p_val = p_val,
+        conn = stat, p_val = p_val,
         group_a = g1, group_b = g2,
         test = list(test), background = list(background)
       )
@@ -210,11 +217,38 @@ run_connectivity <- function(corr_lst) {
     return(df2)
   })
   cat(".")
-  return(res)
+
+  res_coded_for_median <- res %>%
+    mutate(group_a = as.character(group_a),
+           group_b = as.character(group_b)) %>%
+    mutate(grouping_var_code = map2_chr(group_a, group_b, function(a,b){
+      vec_a <- str_split(string = a, pattern = "--", simplify = T)
+      a_code <- vec_a[1] # c(1, length(vec_a))
+      vec_b <- str_split(string = b, pattern = "--", simplify = T)
+      b_code <- vec_b[1] # c(1, length(vec_b))
+      coded <- str_c(sort(c(a_code, b_code)), collapse =  "_") # grouping by this code should create pairs
+      return(coded)
+    })) %>%
+    group_by(grouping_var_code) %>%
+    arrange(grouping_var_code)
+  
+  res_median <- res_coded_for_median %>%
+    summarize(median_conn = median(conn, na.rm = T), .groups = "drop") %>% # should guarantee that no NA's in data
+    right_join(res_coded_for_median, by = "grouping_var_code") %>%
+    select(-test, -background, -p_val) %>%
+    ungroup() %>%
+    select(-grouping_var_code, -conn) %>%
+    spread(group_b, median_conn) %>%
+    mutate_at(vars(-group_cols()), ~replace(., is.na(.), 1)) %>% # replace all i == j entries with 1
+    as.data.frame() %>%
+    select(-group_a) %>%
+    as.matrix()
+  rownames(res_median) <- colnames(res_median)
+
+ # complete, and collapsed by median
+  return(list("res" = res, "res_median" = res_median))
 }
 
-library(parallel)
-library(doParallel)
 
 message("\nComputing connectivity...")
 
@@ -240,9 +274,10 @@ clusterExport(cl,
 
 sample_conn_lst <- parLapply(cl, sample_corr_lst, fun = run_connectivity)
 names(sample_conn_lst) <- names(sample_corr_lst)
-median_sample_conn_lst <- parLapply(cl, sample_conn_lst, 
-fun = collapse_connectivity_by_median)
-names(median_sample_conn_lst) <- names(sample_corr_lst)
+# median_sample_conn_lst <- parLapply(cl, sample_conn_lst,
+#   fun = collapse_connectivity_by_median
+# )
+# names(median_sample_conn_lst) <- names(sample_corr_lst)
 stopCluster(cl) # kill cluster
 
 # end timer
@@ -251,7 +286,8 @@ message(qq("""Done. Completed processing @{length(sample_conn_lst)}
 items in @{unname(clock2[3])} seconds"""))
 
 
-map(sample_conn_lst, function(tbl) collapse_connectivity_by_median(tbl))
+
+
 
 
 # # everything linked by id

@@ -36,6 +36,9 @@ library(org.Hs.eg.db)
 library(limma)
 
 
+library(parallel)
+library(doParallel)
+
 # library(doMC)
 library(conflicted)
 library(showtext)
