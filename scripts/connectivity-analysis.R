@@ -69,14 +69,11 @@ merged_p100_obj <- suppressMessages(Reduce(
 ))
 (p100_se <- as(merged_p100_obj, "SummarizedExperiment"))
 
-# my_mat <- mat(merged_p100_obj) %>%
-#   as.data.frame() %>%
-#   rownames_to_column("id")
-# my_row_meta <- meta(merged_p100_obj, dimension = "row")
-# joined <- left_join(my_mat, my_row_meta) %>%
-#   as_tibble() %>%
-#   select(pr_gene_symbol, `PA5-1B07E-001A01`:`PYC-35F57-196H12`)
-# rbm17 <- joined %>% filter(pr_gene_symbol == "RBM17")
+# my_mat <- mat(merged_p100_obj) %>% as.data.frame() %>%
+#   rownames_to_column("id") my_row_meta <- meta(merged_p100_obj, dimension =
+#   "row") joined <- left_join(my_mat, my_row_meta) %>% as_tibble() %>%
+#   select(pr_gene_symbol, `PA5-1B07E-001A01`:`PYC-35F57-196H12`) rbm17 <-
+#   joined %>% filter(pr_gene_symbol == "RBM17")
 
 
 # my meta data
@@ -116,8 +113,8 @@ p100_obj <- melted_merged_p100_obj %>%
   mutate(replicate_id = str_c(master_id, column_id, sep = "::")) %>%
   select(master_id, replicate_id, everything()) %>%
   group_by(master_id, replicate_id) %>%
-  # some gene names are the same, so you need to make them 
-  # unique and reference the phosphosite later
+  # some gene names are the same, so you need to make them unique and reference
+  # the phosphosite later
   mutate(u_pr_gene_symbol = make.unique(pr_gene_symbol, sep = "_"))
 
 
@@ -168,8 +165,8 @@ cat(".Done.\n")
 
 # connectivity is computed across replicates!!
 run_connectivity <- function(corr_lst) {
-  # corr_lst <- sample_corr_lst$`1271738-62-5` 
-  # matrix; gname <- names(sample_corr_lst)[1]
+  # corr_lst <- sample_corr_lst$`1271738-62-5` matrix; gname <-
+  # names(sample_corr_lst)[1]
 
   corr_tbl <- corr_lst$tibble
   groups <- corr_tbl %>%
@@ -274,8 +271,8 @@ clusterExport(cl,
 
 sample_conn_lst <- parLapply(cl, sample_corr_lst, fun = run_connectivity)
 names(sample_conn_lst) <- names(sample_corr_lst)
-# median_sample_conn_lst <- parLapply(cl, sample_conn_lst,
-#   fun = collapse_connectivity_by_median
+# median_sample_conn_lst <- parLapply(cl, sample_conn_lst, fun =
+#   collapse_connectivity_by_median
 # )
 # names(median_sample_conn_lst) <- names(sample_corr_lst)
 stopCluster(cl) # kill cluster
@@ -292,38 +289,27 @@ items in @{unname(clock2[3])} seconds"""))
 
 # # everything linked by id
 # # rows can be linked by row number
-# m <- mat(merged_p100_obj)
-# tbl <- m %>%
-#   as.data.frame() %>%
-#   rownames_to_column("id") %>%
-#   as_tibble()
+# m <- mat(merged_p100_obj) tbl <- m %>% as.data.frame() %>%
+# rownames_to_column("id") %>% as_tibble()
 #
 #
 # # these IDs are unique or not?
 # stopifnot(length(tbl$id %>% unique) == length(tbl$id))
 #
 # # metadata
-# row_meta <- meta(merged_p100_obj, dimension = "row") %>%
-#   as_tibble() %>%
-#   mutate(row_id = id,
-#          row_idx = row_number())
+# row_meta <- meta(merged_p100_obj, dimension = "row") %>% as_tibble() %>%
+#   mutate(row_id = id, row_idx = row_number())
 #
-# col_meta <- meta(merged_p100_obj, dimension = "column") %>%
-#   as_tibble() %>%
+# col_meta <- meta(merged_p100_obj, dimension = "column") %>% as_tibble() %>%
 #   mutate(col_id = id)
 #
 
-# my_col_meta <- col_meta %>%
-#   mutate(pert_iname = tolower(pert_iname)) %>%
-#   left_join(drugs_moa_df, by="pert_iname") %>%
-#   mutate(master_id = make.unique(str_c(cell_id, pert_iname, pert_class, sep = "--"))) %>%
+# my_col_meta <- col_meta %>% mutate(pert_iname = tolower(pert_iname)) %>%
+#   left_join(drugs_moa_df, by="pert_iname") %>% mutate(master_id =
+#   make.unique(str_c(cell_id, pert_iname, pert_class, sep = "--"))) %>%
 #   group_by(cell_id, pert_iname)
 #
 #
-# my_ds_rank_by_column <- rank_gct(merged_p100_obj, dim="col")
-# ranked_m <- mat(my_ds_rank_by_column)
-# plot(ranked_m[1:25, ],
-#      m[1:25, ],
-#      xlab="rank",
-#      ylab="differential expression score",
-#      main="score vs. rank")
+# my_ds_rank_by_column <- rank_gct(merged_p100_obj, dim="col") ranked_m <-
+# mat(my_ds_rank_by_column) plot(ranked_m[1:25, ], m[1:25, ], xlab="rank",
+# ylab="differential expression score", main="score vs. rank")
