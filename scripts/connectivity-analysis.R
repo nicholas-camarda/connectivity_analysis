@@ -1,12 +1,8 @@
 
-# add keys through github
-# https://kbroman.org/github_tutorial/pages/first_time.html 
-
 winos <- ifelse(grepl("windows", Sys.info()["sysname"], ignore.case = T), 1, 0)
 if (winos == 1) {
   source("C:\\Users\\ncama\\OneDrive - Tufts\\phd\\ws\\scripts\\master-source.R")
 } else {
-  # change to .../phd/ws/proteomics/...
   source("/Users/Nicholas/OneDrive - Tufts/phd/ws/proteomics/scripts/master-source.R")
 }
 
@@ -14,11 +10,12 @@ my_extract <- function(chr, idx) {
   res <- str_split(string = chr, pattern = "-", simplify = T)[, idx]
   return(res)
 }
-# NOTE: read all the data from RAW GCT directory and 
+# NOTE: read all the data from RAW GCT directory and
 #' merge everything using library functions, not excel
 
 cat("\nReading and merging data...")
-all_data_fns <- tibble(parent_dir = file.path(DATASETS_DIRECTORY, "RAW GCT")) %>%
+parent_dir_fn <- file.path(DATASETS_DIRECTORY, "RAW GCT")
+all_data_fns <- tibble(parent_dir = parent_dir_fn) %>%
   mutate(fn = map(parent_dir, function(pr) list.files(pr))) %>%
   unnest(cols = c(fn)) %>%
   mutate(full_path_fn = map2_chr(fn, parent_dir, function(fn, pd) {
@@ -46,28 +43,26 @@ data <- all_data_fns %>%
   )
 cat("Done.\n")
 
-# View(data[-1])
-
-# https://stackoverflow.com/questions/8091303/simultaneously-merge-multiple-data-frames-in-a-list
-#' recursively merge list
-
 anonymous_gct_merge <- function(dtf1, dtf2) {
   res <- merge_gct(dtf1, dtf2, dim = "column", matrix_only = FALSE)
   return(res)
 }
 
 #' @note cmapR help functions https://rdrr.io/github/cmap/cmapR/man/
-
 dataset <- "P100"
 grouping_var <- "pert_iname"
+SPECIFIC_OUTPUT_DIR <- file.path(OUTPUT_DIRECTORY, dataset, grouping_var)
 
 p100_data <- data %>% filter(dataset_type == dataset)
 p100_data_lst <- as.list(p100_data$obj) %>% setNames(p100_data$fn)
+# https://stackoverflow.com/questions/8091303/simultaneously-merge-multiple-data-frames-in-a-list
+#' recursively merge list
 merged_p100_obj <- suppressMessages(Reduce(
   f = anonymous_gct_merge,
   x = p100_data_lst
 ))
-(p100_se <- as(merged_p100_obj, "SummarizedExperiment"))
+
+# (p100_se <- as(merged_p100_obj, "SummarizedExperiment"))
 
 # my_mat <- mat(merged_p100_obj) %>% as.data.frame() %>%
 #   rownames_to_column("id") my_row_meta <- meta(merged_p100_obj, dimension =
@@ -164,9 +159,11 @@ cat(".Done.\n")
 
 
 # connectivity is computed across replicates!!
-run_connectivity <- function(corr_lst) {
+run_conn_clust <- function(corr_lst) {
   suppressMessages(library(tidyverse))
   suppressMessages(library(Matching))
+  suppressMessages(library(pvclust))
+  source("./scripts/master-source.R")
   # corr_lst <- sample_corr_lst$`1271738-62-5` 
 
   corr_tbl <- corr_lst$tibble
@@ -245,10 +242,35 @@ run_connectivity <- function(corr_lst) {
     as.matrix()
   rownames(res_median) <- colnames(res_median)
 
+  cell_names_from_long <- str_split(
+    string = rownames(res_median),
+    pattern = "--", simplify = T
+
+  )[, 1]
+  pretty_name_res_median <- res_median
+  rownames(pretty_name_res_median) <- cell_names_from_long
+  colnames(pretty_name_res_median) <- cell_names_from_long
+
+  clust_obj <- compute_boot_pvclust(
+    x = pretty_name_res_median,
+    parallel_flag = FALSE,
+    n_boot = 1000
+  )
+  clust_assignments <- generate_clusters(
+    x = clust_obj,
+    thresh = DENDRO_CUT_THRESH
+  )
+  co_clust_bool <- co_cluster(cut_tree_obj = clust_assignments)
+  clustering_output_lst <- list(clust_obj, clust_assignments, co_clust_bool) %>%
+    setNames(c("clust_obj", "clust_assignments", "co_clust_bool"))
+
  # complete, and collapsed by median
  return(list(
    "res_tibble" = res_coded_for_median,
-   "res_median_matrix" = res_median
+   "res_median_matrix" = res_median,
+   "clust_obj" = clust_obj,
+   "clust_assignments" = clust_assignments,
+   "co_clust_bool" = co_clust_bool
  ))
 }
 
@@ -259,8 +281,24 @@ param <- SnowParam(
   workers = registered()$SnowParam$.clusterargs$spec,
   type = "SOCK"
 )
-sample_conn_lst <- bplapply(sample_corr_lst, run_connectivity, BPPARAM = param)
+sample_conn_lst <- bplapply(
+  X = sample_corr_lst,
+  FUN = run_conn_clust,
+  BPPARAM = param
+)
+
 clock2 <- proc.time() - clock1
-message(qq("Done. Completed processing @{length(sample_conn_lst)} items in @{unname(clock2[3])} seconds"))
+message("Done")
+message(qq("Completed processing @{length(sample_conn_lst)} items"))
+message(qq("Total time: in @{unname(clock2[3])} seconds"))
+
+connctivity_output_dir <- file.path(SPECIFIC_OUTPUT_DIR, "conn")
+dir.create(connctivity_output_dir, showWarnings = FALSE)
+message(qq("Writing output to path:\n@{connctivity_output_dir}"))
+write_rds(
+  x = sample_conn_lst,
+  file = connctivity_output_dir,
+  compress = "gz"
+)
 
 
