@@ -68,14 +68,16 @@ compute_connectivity <- function(M, use_bootstrap = FALSE) {
 
       if (use_bootstrap) {
         #' estimate ks stat on a population by sampling data with replacement
-        #' provides correct coverage even when the data are not continuous (similar values in the two groups)
-        #' ties are allowed in this test, unlike the original
+        #' provides correct coverage even when the data are not continuous
+        #' (similar values in the two groups) ties are allowed in this test,
+        #' unlike the original
         #'
         #' https://stats.stackexchange.com/questions/222294/understanding-kolmogorov-smirnov-test-in-r
-        #'  The test statistic is the maximum distance between the ECDF's of the two samples.
-        #' The p-value is the probability of seeing a test statistic as high or higher than
-        #' the one observed if the two samples were drawn from the same distribution.
-        #' (It is not the "probability that var1 = var2". And furthermore, 1-p_value
+        #'  The test statistic is the maximum distance between the ECDF's of the
+        #'  two samples. The p-value is the probability of seeing a test
+        #'  statistic as high or higher than the one observed if the two samples
+        #'  were drawn from the same distribution. (It is not the "probability
+        #'  that var1 = var2". And furthermore, 1-p_value
         #' is NOT the that probability either.)
         res <- ks.boot(test, bkg, nboots = 1000, alternative = "two.sided")
         connectivity <- res$ks$statistic
@@ -206,7 +208,7 @@ compute_boot_pvclust_legacy <- function(x, dname, n_boot = 1000) {
 #' @param base_output_dir name of base output dir for plots
 compute_boot_pvclust <- function(x, parallel_flag = FALSE, n_boot = 1000) {
   if (!(nrow(x) > 2)) {
-    message("Not enough data to perform clustering = analysis.")
+    message("Not enough data to perform clustering analysis.")
     return(NULL)
   }
   res <- pvclust(x,
