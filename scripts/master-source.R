@@ -2,8 +2,6 @@ library(tidyverse)
 library(data.table)
 library(readxl)
 library(cmapR)
-library(coop)
-library(purrr)
 library(amap) # clustering of correlations according to Lev's paper
 library(pvclust) # cluster stability, Lev's paper
 library(Matching)
@@ -36,13 +34,9 @@ library(org.Hs.eg.db)
 library(limma)
 
 
-library(parallel)
-library(doParallel)
-
-# library(doMC)
+library(BiocParallel)
 library(conflicted)
 library(showtext)
-# devtools::install_github('cmap/morpheus.R')
 
 set.seed(42) 
 # ncores <- 6
@@ -80,7 +74,6 @@ conflict_prefer("clusterEvalQ", "parallel")
 ## IMPORTANT DIRECTORIES ##
 
 OUTPUT_DIR_NAME <- "output"
-
 
 if (winos == 1){
   WORKING_DIRECTORY <- "C:\\Users\\ncama\\OneDrive - Tufts\\phd\\ws"
