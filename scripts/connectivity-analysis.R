@@ -160,10 +160,11 @@ cat(".Done.\n")
 
 # connectivity is computed across replicates!!
 run_conn_clust <- function(corr_lst) {
+  # NOTE: 
   suppressMessages(library(tidyverse))
   suppressMessages(library(Matching))
   suppressMessages(library(pvclust))
-  source("./scripts/master-source.R")
+  suppressWarnings(suppressMessages(source("./scripts/master-source.R")))
   # corr_lst <- sample_corr_lst$`1271738-62-5` 
 
   corr_tbl <- corr_lst$tibble
@@ -293,12 +294,14 @@ message(qq("Completed processing @{length(sample_conn_lst)} items"))
 message(qq("Total time: in @{unname(clock2[3])} seconds"))
 
 connctivity_output_dir <- file.path(SPECIFIC_OUTPUT_DIR, "conn")
-dir.create(connctivity_output_dir, showWarnings = FALSE)
+dir.create(connctivity_output_dir, showWarnings = FALSE, recursive = T)
 message(qq("Writing output to path:\n@{connctivity_output_dir}"))
 write_rds(
   x = sample_conn_lst,
-  file = connctivity_output_dir,
+  file = file.path(connctivity_output_dir, "conn.rds"),
   compress = "gz"
 )
+
+# TODO: diff ex, heatmaps dendros
 
 
