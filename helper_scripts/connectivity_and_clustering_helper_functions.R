@@ -190,7 +190,7 @@ display_pvclust_poster <- function(res, ct, dname, dataset) {
 #' @param x numeric matrix for clustering
 #' @param dname names of drugs (groups) -- only used for naming the result plot
 #' @param base_output_dir name of base output dir for plots
-compute_boot_pvclust <- function(x, dname, n_boot = 1000) {
+compute_boot_pvclust_legacy <- function(x, dname, n_boot = 1000) {
   message(dname)
   if (!(nrow(x) > 2)) {
     message("Not enough data to perform clustering analysis. Degenerate clusters.")
@@ -200,6 +200,24 @@ compute_boot_pvclust <- function(x, dname, n_boot = 1000) {
   return(res)
 }
 
+#' @note compute clusters via Lev's method
+#' @param x numeric matrix for clustering
+#' @param dname names of drugs (groups) -- only used for naming the result plot
+#' @param base_output_dir name of base output dir for plots
+compute_boot_pvclust <- function(x, parallel_flag = FALSE, n_boot = 1000) {
+  if (!(nrow(x) > 2)) {
+    message("Not enough data to perform clustering = analysis.")
+    return(NULL)
+  }
+  res <- pvclust(x,
+    method.dist = "cor",
+    method.hclust = "average",
+    quiet = TRUE,
+    nboot = n_boot, 
+    iseed = 2334, parallel = parallel_flag
+  )
+  return(res)
+}
 
 #' @note extract cluster assignments but cutting dendrograms at desired fraction of max tree height
 #' @param x pvclust object
