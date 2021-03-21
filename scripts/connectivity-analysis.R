@@ -165,8 +165,9 @@ cat(".Done.\n")
 
 # connectivity is computed across replicates!!
 run_connectivity <- function(corr_lst) {
-  # corr_lst <- sample_corr_lst$`1271738-62-5` matrix; gname <-
-  # names(sample_corr_lst)[1]
+  suppressMessages(library(tidyverse))
+  suppressMessages(library(Matching))
+  # corr_lst <- sample_corr_lst$`1271738-62-5` 
 
   corr_tbl <- corr_lst$tibble
   groups <- corr_tbl %>%
@@ -198,7 +199,6 @@ run_connectivity <- function(corr_lst) {
       ks_res <- ks.boot(test, background,
         nboot = 1000, alternative = "two.sided"
       )
-      
       stat <- ks_res$ks$statistic
       if (median(test, na.rm = T) < median(background, na.rm = T)) {
         stat <- -1 * stat
@@ -218,98 +218,49 @@ run_connectivity <- function(corr_lst) {
   res_coded_for_median <- res %>%
     mutate(group_a = as.character(group_a),
            group_b = as.character(group_b)) %>%
-    mutate(grouping_var_code = map2_chr(group_a, group_b, function(a,b){
+    mutate(grouping_var_code = map2_chr(group_a, group_b, function(a,b) {
       vec_a <- str_split(string = a, pattern = "--", simplify = T)
       a_code <- vec_a[1] # c(1, length(vec_a))
       vec_b <- str_split(string = b, pattern = "--", simplify = T)
       b_code <- vec_b[1] # c(1, length(vec_b))
-      coded <- str_c(sort(c(a_code, b_code)), collapse =  "_") # grouping by this code should create pairs
+      # grouping by this code should create pairs
+      coded <- str_c(sort(c(a_code, b_code)), collapse =  "_")
       return(coded)
     })) %>%
     group_by(grouping_var_code) %>%
-    arrange(grouping_var_code)
-  
+      arrange(grouping_var_code)
+
   res_median <- res_coded_for_median %>%
-    summarize(median_conn = median(conn, na.rm = T), .groups = "drop") %>% # should guarantee that no NA's in data
+  # should guarantee that no NA's in data
+    summarize(median_conn = median(conn, na.rm = T), .groups = "drop") %>%
     right_join(res_coded_for_median, by = "grouping_var_code") %>%
-    select(-test, -background, -p_val) %>%
+    dplyr::select(-test, -background, -p_val) %>%
     ungroup() %>%
-    select(-grouping_var_code, -conn) %>%
+    dplyr::select(-grouping_var_code, -conn) %>%
     spread(group_b, median_conn) %>%
-    mutate_at(vars(-group_cols()), ~replace(., is.na(.), 1)) %>% # replace all i == j entries with 1
+    # replace all i == j entries with 1
+    mutate_at(vars(-group_cols()), ~replace(., is.na(.), 1)) %>%
     as.data.frame() %>%
-    select(-group_a) %>%
+    dplyr::select(-group_a) %>%
     as.matrix()
   rownames(res_median) <- colnames(res_median)
 
  # complete, and collapsed by median
-  return(list("res" = res, "res_median" = res_median))
+ return(list(
+   "res_tibble" = res_coded_for_median,
+   "res_median_matrix" = res_median
+ ))
 }
 
 
 message("\nComputing connectivity...")
-
-# start timer
 clock1 <- proc.time()
-
-num_cores <- parallel::detectCores()
-cl <- makeCluster(num_cores - 1)
-registerDoParallel(cl)
-
-# need to export necessary fucntions / libraries / data to cluster
-invisible(clusterEvalQ(cl, c(
-  library(tidyverse),
-  library(doParallel), library(Matching)
-)))
-clusterExport(cl,
-  list(
-    "run_connectivity", "collapse_connectivity_by_median",
-    "make_numeric_mat", "sample_corr_lst"
-  ),
-  envir = environment()
+param <- SnowParam(
+  workers = registered()$SnowParam$.clusterargs$spec,
+  type = "SOCK"
 )
-
-sample_conn_lst <- parLapply(cl, sample_corr_lst, fun = run_connectivity)
-names(sample_conn_lst) <- names(sample_corr_lst)
-# median_sample_conn_lst <- parLapply(cl, sample_conn_lst, fun =
-#   collapse_connectivity_by_median
-# )
-# names(median_sample_conn_lst) <- names(sample_corr_lst)
-stopCluster(cl) # kill cluster
-
-# end timer
+sample_conn_lst <- bplapply(sample_corr_lst, run_connectivity, BPPARAM = param)
 clock2 <- proc.time() - clock1
-message(qq("""Done. Completed processing @{length(sample_conn_lst)} 
-items in @{unname(clock2[3])} seconds"""))
+message(qq("Done. Completed processing @{length(sample_conn_lst)} items in @{unname(clock2[3])} seconds"))
 
 
-
-
-
-
-# # everything linked by id
-# # rows can be linked by row number
-# m <- mat(merged_p100_obj) tbl <- m %>% as.data.frame() %>%
-# rownames_to_column("id") %>% as_tibble()
-#
-#
-# # these IDs are unique or not?
-# stopifnot(length(tbl$id %>% unique) == length(tbl$id))
-#
-# # metadata
-# row_meta <- meta(merged_p100_obj, dimension = "row") %>% as_tibble() %>%
-#   mutate(row_id = id, row_idx = row_number())
-#
-# col_meta <- meta(merged_p100_obj, dimension = "column") %>% as_tibble() %>%
-#   mutate(col_id = id)
-#
-
-# my_col_meta <- col_meta %>% mutate(pert_iname = tolower(pert_iname)) %>%
-#   left_join(drugs_moa_df, by="pert_iname") %>% mutate(master_id =
-#   make.unique(str_c(cell_id, pert_iname, pert_class, sep = "--"))) %>%
-#   group_by(cell_id, pert_iname)
-#
-#
-# my_ds_rank_by_column <- rank_gct(merged_p100_obj, dim="col") ranked_m <-
-# mat(my_ds_rank_by_column) plot(ranked_m[1:25, ], m[1:25, ], xlab="rank",
-# ylab="differential expression score", main="score vs. rank")
