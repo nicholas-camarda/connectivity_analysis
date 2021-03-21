@@ -75,6 +75,7 @@ conflict_prefer("clusterEvalQ", "parallel")
 
 OUTPUT_DIR_NAME <- "output"
 
+winos <- ifelse(grepl("windows", Sys.info()["sysname"], ignore.case = T), 1, 0)
 if (winos == 1){
   WORKING_DIRECTORY <- "C:\\Users\\ncama\\OneDrive - Tufts\\phd\\ws"
   OUTPUT_DIRECTORY <- file.path("C:\\Users\\ncama\\phd\\proteomics", OUTPUT_DIR_NAME)
