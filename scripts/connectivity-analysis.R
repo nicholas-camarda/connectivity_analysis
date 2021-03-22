@@ -84,14 +84,18 @@ sample_corr_lst <- map(full_splt_lst, function(x) {
 
   look_up_df <- x %>% distinct(master_id, replicate_id)
   res_final2 <- res_final1 %>%
-    pivot_longer(cols = colnames(res_final1)[-1], 
-    names_to = "unique_id_b", values_to = "corr") %>%
+    pivot_longer(
+      cols = colnames(res_final1)[-1],
+      names_to = "unique_id_b", values_to = "corr"
+    ) %>%
     right_join(look_up_df %>%
-      rename(group_a = master_id, unique_id_a = replicate_id), 
-      by = "unique_id_a") %>%
+      rename(group_a = master_id, unique_id_a = replicate_id),
+    by = "unique_id_a"
+    ) %>%
     right_join(look_up_df %>%
-      rename(group_b = master_id, unique_id_b = replicate_id), 
-      by = "unique_id_b")
+      rename(group_b = master_id, unique_id_b = replicate_id),
+    by = "unique_id_b"
+    )
 
   res_final2
   cat(".")
@@ -103,12 +107,12 @@ cat(".Done.\n")
 #' @note connectiivty and clustering super function
 #' @param corr_lst sample-level correlation values
 run_conn_clust <- function(corr_lst) {
-  # NOTE: 
+  # NOTE:
   suppressMessages(library(tidyverse))
   suppressMessages(library(Matching))
   suppressMessages(library(pvclust))
   suppressWarnings(suppressMessages(source("./scripts/master-source.R")))
-  # corr_lst <- sample_corr_lst$`1271738-62-5` 
+  # corr_lst <- sample_corr_lst$`1271738-62-5`
 
   corr_tbl <- corr_lst$tibble
   groups <- corr_tbl %>%
@@ -157,22 +161,24 @@ run_conn_clust <- function(corr_lst) {
   cat(".")
 
   res_coded_for_median <- res %>%
-    mutate(group_a = as.character(group_a),
-           group_b = as.character(group_b)) %>%
-    mutate(grouping_var_code = map2_chr(group_a, group_b, function(a,b) {
+    mutate(
+      group_a = as.character(group_a),
+      group_b = as.character(group_b)
+    ) %>%
+    mutate(grouping_var_code = map2_chr(group_a, group_b, function(a, b) {
       vec_a <- str_split(string = a, pattern = "--", simplify = T)
       a_code <- vec_a[1] # c(1, length(vec_a))
       vec_b <- str_split(string = b, pattern = "--", simplify = T)
       b_code <- vec_b[1] # c(1, length(vec_b))
       # grouping by this code should create pairs
-      coded <- str_c(sort(c(a_code, b_code)), collapse =  "_")
+      coded <- str_c(sort(c(a_code, b_code)), collapse = "_")
       return(coded)
     })) %>%
     group_by(grouping_var_code) %>%
-      arrange(grouping_var_code)
+    arrange(grouping_var_code)
 
   res_median <- res_coded_for_median %>%
-  # should guarantee that no NA's in data
+    # should guarantee that no NA's in data
     summarize(median_conn = median(conn, na.rm = T), .groups = "drop") %>%
     right_join(res_coded_for_median, by = "grouping_var_code") %>%
     dplyr::select(-test, -background, -p_val) %>%
@@ -180,7 +186,7 @@ run_conn_clust <- function(corr_lst) {
     dplyr::select(-grouping_var_code, -conn) %>%
     spread(group_b, median_conn) %>%
     # replace all i == j entries with 1
-    mutate_at(vars(-group_cols()), ~replace(., is.na(.), 1)) %>%
+    mutate_at(vars(-group_cols()), ~ replace(., is.na(.), 1)) %>%
     as.data.frame() %>%
     dplyr::select(-group_a) %>%
     as.matrix()
@@ -189,7 +195,6 @@ run_conn_clust <- function(corr_lst) {
   cell_names_from_long <- str_split(
     string = rownames(res_median),
     pattern = "--", simplify = T
-
   )[, 1]
   pretty_name_res_median <- res_median
   rownames(pretty_name_res_median) <- cell_names_from_long
@@ -208,19 +213,21 @@ run_conn_clust <- function(corr_lst) {
   clustering_output_lst <- list(clust_obj, clust_assignments, co_clust_bool) %>%
     setNames(c("clust_obj", "clust_assignments", "co_clust_bool"))
 
- # complete, and collapsed by median
- return(list(
-   "res_tibble" = res_coded_for_median,
-   "res_median_matrix" = res_median,
-   "clust_obj" = clust_obj,
-   "clust_assignments" = clust_assignments,
-   "co_clust_bool" = co_clust_bool
- ))
+  # complete, and collapsed by median
+  return(list(
+    "res_tibble" = res_coded_for_median,
+    "res_median_matrix" = res_median,
+    "clust_obj" = clust_obj,
+    "clust_assignments" = clust_assignments,
+    "co_clust_bool" = co_clust_bool
+  ))
 }
 
 #' @note run parallel connectivity and clustering analysis
+#' @param p100_obj
 #' @param sample_corr_lst sample correlation list obj
-run_conn_clust_par <- function(sample_corr_lst) {
+#' @return [multi_obj_save] combined output of analysis so far
+run_conn_clust_par <- function(p100_obj, sample_corr_lst) {
   clock1 <- proc.time()
   param <- SnowParam(
     # number of cores
@@ -244,7 +251,23 @@ run_conn_clust_par <- function(sample_corr_lst) {
 
   clock2 <- proc.time() - clock1
   message("Done")
-  return(sample_conn_lst)
+  message(qq("Completed processing @{length(sample_conn_lst)} items"))
+  message(qq("Total time: in @{unname(clock2[3])} seconds"))
+  message(qq("Writing output to path:\n@{res_cache_obj_fn}"))
+
+  multi_obj_save <- list(
+    "p100_obj" = p100_obj,
+    "corr_obj" = sample_corr_lst,
+    "conn_obj" = sample_conn_lst
+  )
+
+  write_rds(
+    x = multi_obj_save,
+    file = res_cache_obj_fn,
+    compress = "gz"
+  )
+
+  return(multi_obj_save)
 }
 
 connctivity_output_dir <- file.path(SPECIFIC_OUTPUT_DIR, "cache")
@@ -252,51 +275,34 @@ dir.create(connctivity_output_dir, showWarnings = FALSE, recursive = TRUE)
 res_cache_obj_fn <- file.path(connctivity_output_dir, "data.rds")
 
 
-response <- readline(prompt = "Overwrite [y/n] (yes or load from cache): ")
+response <- readline(prompt = "Overwrite [y/n]: ")
 if (response == "y") {
   message("\nComputing connectivity and performing clustering...")
-  sample_conn_lst <- run_conn_clust_par(sample_corr_lst)
+  multi_obj_save <- run_conn_clust_par(p100_obj, sample_corr_lst)
 } else if (response == "n") {
   if (!file.exists(res_cache_obj_fn)) {
     message("Cache obj doesn't exist. Computing conn/clust...")
     message("\nComputing connectivity and performing clustering...")
-    sample_conn_lst <- run_conn_clust_par(sample_corr_lst)
-  }
-  else {
+    multi_obj_save <- run_conn_clust_par(p100_obj, sample_corr_lst)
+  } else {
     message("Loading from cache...")
-    sample_conn_lst <- read_rds(file.path(connctivity_output_dir, "data.rds"))
+    multi_obj_save <- read_rds(file.path(connctivity_output_dir, "data.rds"))
   }
 } else {
   message("Incorrect input. Will attempt to load from cache.")
-  sample_conn_lst <- tryCatch({
-    read_rds(file.path(connctivity_output_dir, "data.rds"))
-    message("Successfully loaded from cache.")
-  },
+  multi_obj_save <- tryCatch(
+    {
+      read_rds(file.path(connctivity_output_dir, "data.rds"))
+      message("Successfully loaded from cache.")
+    },
     error = function(cond) {
       message("Loading failed. Running conn/clust analysis...")
-      sample_conn_lst <- run_conn_clust_par(sample_corr_lst)
+      multi_obj_save <- run_conn_clust_par(p100_obj, sample_corr_lst)
     }
   )
 }
+
 message("Done.")
-
-message(qq("Completed processing @{length(sample_conn_lst)} items"))
-message(qq("Total time: in @{unname(clock2[3])} seconds"))
-
-
-message(qq("Writing output to path:\n@{res_cache_obj_fn}"))
-
-multi_obj_save <- list(
-  "p100_obj" = p100_obj,
-  "corr_obj" = sample_corr_lst,
-  "conn_obj" = sample_conn_lst
-)
-
-write_rds(
-  x = multi_obj_save,
-  file = res_cache_obj_fn,
-  compress = "gz"
-)
 
 # DEBUG:
 # sample_conn_lst <- read_rds(file.path(connctivity_output_dir, "data.rds"))
@@ -307,12 +313,10 @@ co_clust_lst <- map(sample_conn_lst, function(lst) {
   }
   if (lst$co_clust_bool == TRUE) {
     return(lst)
-  } else { 
+  } else {
     return(NULL)
   }
 })
 
 
 # TODO: diff ex, heatmaps dendros
-
-
