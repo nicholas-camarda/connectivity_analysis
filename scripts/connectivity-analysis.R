@@ -7,9 +7,6 @@ if (winos == 1) {
 }
 
 cat("\nReading and merging data...")
-parse_gctx(old_fn)
-
-
 #' @note cmapR help functions https://rdrr.io/github/cmap/cmapR/man/
 dataset <- "P100"
 grouping_var <- "pert_iname"
@@ -102,8 +99,9 @@ sample_corr_lst <- map(full_splt_lst, function(x) {
 })
 cat(".Done.\n")
 
-
 # connectivity is computed across replicates!!
+#' @note connectiivty and clustering super function
+#' @param corr_lst sample-level correlation values
 run_conn_clust <- function(corr_lst) {
   # NOTE: 
   suppressMessages(library(tidyverse))
@@ -220,45 +218,88 @@ run_conn_clust <- function(corr_lst) {
  ))
 }
 
+#' @note run parallel connectivity and clustering analysis
+#' @param sample_corr_lst sample correlation list obj
+run_conn_clust_par <- function(sample_corr_lst) {
+  clock1 <- proc.time()
+  param <- SnowParam(
+    # number of cores
+    workers = registered()$SnowParam$.clusterargs$spec,
+    # socket cluster can be used with windows backend
+    type = "SOCK"
+  )
+  # dmso <- compute_connectivity(M = sample_corr_lst$dmso$matrix)
+  # dmso_median <- collapse_connectivity_by_median(dmso %>%
+  #   rename(group_a = grp_namesA, group_b = grp_namesB))
+  # dmso_clust_obj <- compute_boot_pvclust(dmso_median)
+  # dmso_clust_assign <- generate_clusters(x = dmso_clust_obj,
+  # thresh = DENDRO_CUT_THRESH)
+  #  co_clust_bool <- co_cluster(cut_tree_obj = dmso_clust_assign)
 
-message("\nComputing connectivity...")
-clock1 <- proc.time()
-param <- SnowParam(
-  # number of cores
-  workers = registered()$SnowParam$.clusterargs$spec,
-  # socket cluster can be used with windows backend
-  type = "SOCK"
-)
-# dmso <- compute_connectivity(M = sample_corr_lst$dmso$matrix)
-# dmso_median <- collapse_connectivity_by_median(dmso %>%
-#   rename(group_a = grp_namesA, group_b = grp_namesB))
-# dmso_clust_obj <- compute_boot_pvclust(dmso_median)
-# dmso_clust_assign <- generate_clusters(x = dmso_clust_obj,
-# thresh = DENDRO_CUT_THRESH)
-#  co_clust_bool <- co_cluster(cut_tree_obj = dmso_clust_assign)
+  sample_conn_lst <- bplapply(
+    X = sample_corr_lst,
+    FUN = run_conn_clust,
+    BPPARAM = param
+  )
 
-sample_conn_lst <- bplapply(
-  X = sample_corr_lst,
-  FUN = run_conn_clust,
-  BPPARAM = param
-)
+  clock2 <- proc.time() - clock1
+  message("Done")
+  return(sample_conn_lst)
+}
 
-clock2 <- proc.time() - clock1
-message("Done")
+connctivity_output_dir <- file.path(SPECIFIC_OUTPUT_DIR, "cache")
+dir.create(connctivity_output_dir, showWarnings = FALSE, recursive = TRUE)
+res_cache_obj_fn <- file.path(connctivity_output_dir, "data.rds")
+
+
+response <- readline(prompt = "Overwrite [y/n] (yes or load from cache): ")
+if (response == "y") {
+  message("\nComputing connectivity and performing clustering...")
+  sample_conn_lst <- run_conn_clust_par(sample_corr_lst)
+} else if (response == "n") {
+  if (!file.exists(res_cache_obj_fn)) {
+    message("Cache obj doesn't exist. Computing conn/clust...")
+    message("\nComputing connectivity and performing clustering...")
+    sample_conn_lst <- run_conn_clust_par(sample_corr_lst)
+  }
+  else {
+    message("Loading from cache...")
+    sample_conn_lst <- read_rds(file.path(connctivity_output_dir, "data.rds"))
+  }
+} else {
+  message("Incorrect input. Will attempt to load from cache.")
+  sample_conn_lst <- tryCatch({
+    read_rds(file.path(connctivity_output_dir, "data.rds"))
+    message("Successfully loaded from cache.")
+  },
+    error = function(cond) {
+      message("Loading failed. Running conn/clust analysis...")
+      sample_conn_lst <- run_conn_clust_par(sample_corr_lst)
+    }
+  )
+}
+message("Done.")
+
 message(qq("Completed processing @{length(sample_conn_lst)} items"))
 message(qq("Total time: in @{unname(clock2[3])} seconds"))
 
-connctivity_output_dir <- file.path(SPECIFIC_OUTPUT_DIR, "conn")
-dir.create(connctivity_output_dir, showWarnings = FALSE, recursive = T)
-message(qq("Writing output to path:\n@{connctivity_output_dir}"))
+
+message(qq("Writing output to path:\n@{res_cache_obj_fn}"))
+
+multi_obj_save <- list(
+  "p100_obj" = p100_obj,
+  "corr_obj" = sample_corr_lst,
+  "conn_obj" = sample_conn_lst
+)
+
 write_rds(
-  x = sample_conn_lst,
-  file = file.path(connctivity_output_dir, "conn.rds"),
+  x = multi_obj_save,
+  file = res_cache_obj_fn,
   compress = "gz"
 )
 
 # DEBUG:
-sample_conn_lst <- read_rds(file.path(connctivity_output_dir, "conn.rds"))
+# sample_conn_lst <- read_rds(file.path(connctivity_output_dir, "data.rds"))
 
 co_clust_lst <- map(sample_conn_lst, function(lst) {
   if (is.na(lst$co_clust_bool)) {
@@ -270,7 +311,7 @@ co_clust_lst <- map(sample_conn_lst, function(lst) {
     return(NULL)
   }
 })
-heatmap(sample_conn_lst$dmso$res_median)
+
 
 # TODO: diff ex, heatmaps dendros
 
