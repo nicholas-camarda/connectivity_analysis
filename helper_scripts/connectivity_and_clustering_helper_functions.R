@@ -13,8 +13,8 @@ compute_correlation <- function(x, remove = TRUE) {
 
 #' @note get unique names from matrix
 #' @param M matrix with row and column names
-get_grp_names_from_matrix <- function(M, unique_cs) {
-  grp_names <- str_split(unique_cs, "\\.", simplify = T)[, 1]
+get_grp_names_from_matrix <- function(M, unique_cs, sep_ = "--") {
+  grp_names <- str_split(unique_cs, pattern = sep_, simplify = T)[, 1]
   return(grp_names)
 }
 
@@ -28,7 +28,7 @@ compute_connectivity <- function(M, use_bootstrap = FALSE) {
   # here, we don't care above replicates because they get collapsed down!
   # so no need for the indexing
   unique_cs <- unique(rownames(M))
-  grp_names <- get_grp_names_from_matrix(M, unique_cs)
+  grp_names <- get_grp_names_from_matrix(M, unique_cs, sep_ = "--")
 
   unique_cs_idx <- 1:length(rownames(M))
   cs_tib <- tibble(unique_cs, unique_cs_idx, grp_names)
@@ -40,8 +40,6 @@ compute_connectivity <- function(M, use_bootstrap = FALSE) {
 
   cs_tib <- left_join(cs_tib, grp_idx, by = "grp_names")
   looper <- expand.grid(grp_namesA = unique(cs_tib$grp_names), grp_namesB = unique(cs_tib$grp_names))
-
-  stop()
 
   if (use_bootstrap) message("Using ks.boot")
   conn_df <- looper %>%
