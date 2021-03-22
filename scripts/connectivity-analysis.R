@@ -6,70 +6,19 @@ if (winos == 1) {
   source("/Users/Nicholas/OneDrive - Tufts/phd/ws/proteomics/scripts/master-source.R")
 }
 
-my_extract <- function(chr, idx) {
-  res <- str_split(string = chr, pattern = "-", simplify = T)[, idx]
-  return(res)
-}
-# NOTE: read all the data from RAW GCT directory and
-#' merge everything using library functions, not excel
-
 cat("\nReading and merging data...")
-parent_dir_fn <- file.path(DATASETS_DIRECTORY, "RAW GCT")
-all_data_fns <- tibble(parent_dir = parent_dir_fn) %>%
-  mutate(fn = map(parent_dir, function(pr) list.files(pr))) %>%
-  unnest(cols = c(fn)) %>%
-  mutate(full_path_fn = map2_chr(fn, parent_dir, function(fn, pd) {
-    return(file.path(pd, fn))
-  })) %>%
-  mutate(ext = map_chr(fn, function(fn) {
-    res <- str_split(string = fn, pattern = "\\.", simplify = T)
-    len <- length(res)
-    return(res[len])
-  })) %>%
-  filter(ext == "gct") %>%
-  arrange(full_path_fn)
+parse_gctx(old_fn)
 
-data <- all_data_fns %>%
-  select(fn, full_path_fn) %>%
-  mutate(obj = map(full_path_fn, function(f) {
-    res <- suppressMessages(parse_gctx(f))
-    cat(".")
-    return(res)
-  })) %>%
-  select(obj, everything()) %>%
-  mutate(
-    cell_type = map_chr(fn, my_extract, idx = 1),
-    dataset_type = map_chr(fn, my_extract, idx = 2)
-  )
-cat("Done.\n")
-
-anonymous_gct_merge <- function(dtf1, dtf2) {
-  res <- merge_gct(dtf1, dtf2, dim = "column", matrix_only = FALSE)
-  return(res)
-}
 
 #' @note cmapR help functions https://rdrr.io/github/cmap/cmapR/man/
 dataset <- "P100"
 grouping_var <- "pert_iname"
 SPECIFIC_OUTPUT_DIR <- file.path(OUTPUT_DIRECTORY, dataset, grouping_var)
 
-p100_data <- data %>% filter(dataset_type == dataset)
-p100_data_lst <- as.list(p100_data$obj) %>% setNames(p100_data$fn)
-# https://stackoverflow.com/questions/8091303/simultaneously-merge-multiple-data-frames-in-a-list
-#' recursively merge list
-merged_p100_obj <- suppressMessages(Reduce(
-  f = anonymous_gct_merge,
-  x = p100_data_lst
+merged_p100_obj <- parse_gctx(file.path(
+  DATASETS_DIRECTORY, "Inherited Data", "1st gen data",
+  "P100", "P100-All-Cell-Lines.gct"
 ))
-
-# (p100_se <- as(merged_p100_obj, "SummarizedExperiment"))
-
-# my_mat <- mat(merged_p100_obj) %>% as.data.frame() %>%
-#   rownames_to_column("id") my_row_meta <- meta(merged_p100_obj, dimension =
-#   "row") joined <- left_join(my_mat, my_row_meta) %>% as_tibble() %>%
-#   select(pr_gene_symbol, `PA5-1B07E-001A01`:`PYC-35F57-196H12`) rbm17 <-
-#   joined %>% filter(pr_gene_symbol == "RBM17")
-
 
 # my meta data
 drug_classes_fn <- file.path(REFERENCES_DIRECTORY, "Drug Glossary_edited.xlsx")
@@ -88,13 +37,9 @@ drugs_moa_df <- bind_rows(cancer_drug_moa_df, cv_drug_moa_df) %>%
   mutate(pert_iname = tolower(pert_iname)) %>%
   distinct()
 
-mat_ <- mat(merged_p100_obj)
-
-
 # melt the GCT into a long a table (thank god for this function)
 melted_merged_p100_obj <- melt_gct(merged_p100_obj) %>%
   as_tibble()
-
 
 p100_obj <- melted_merged_p100_obj %>%
   rename(
@@ -279,9 +224,19 @@ run_conn_clust <- function(corr_lst) {
 message("\nComputing connectivity...")
 clock1 <- proc.time()
 param <- SnowParam(
+  # number of cores
   workers = registered()$SnowParam$.clusterargs$spec,
+  # socket cluster can be used with windows backend
   type = "SOCK"
 )
+# dmso <- compute_connectivity(M = sample_corr_lst$dmso$matrix)
+# dmso_median <- collapse_connectivity_by_median(dmso %>%
+#   rename(group_a = grp_namesA, group_b = grp_namesB))
+# dmso_clust_obj <- compute_boot_pvclust(dmso_median)
+# dmso_clust_assign <- generate_clusters(x = dmso_clust_obj,
+# thresh = DENDRO_CUT_THRESH)
+#  co_clust_bool <- co_cluster(cut_tree_obj = dmso_clust_assign)
+
 sample_conn_lst <- bplapply(
   X = sample_corr_lst,
   FUN = run_conn_clust,
@@ -301,6 +256,21 @@ write_rds(
   file = file.path(connctivity_output_dir, "conn.rds"),
   compress = "gz"
 )
+
+# DEBUG:
+sample_conn_lst <- read_rds(file.path(connctivity_output_dir, "conn.rds"))
+
+co_clust_lst <- map(sample_conn_lst, function(lst) {
+  if (is.na(lst$co_clust_bool)) {
+    return(NULL)
+  }
+  if (lst$co_clust_bool == TRUE) {
+    return(lst)
+  } else { 
+    return(NULL)
+  }
+})
+heatmap(sample_conn_lst$dmso$res_median)
 
 # TODO: diff ex, heatmaps dendros
 
