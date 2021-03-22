@@ -7,13 +7,24 @@ anonymous_gct_merge <- function(dtf1, dtf2) {
   return(res)
 }
 
+#' @note extraction function for read_and_merge_gcts
+#' @param chr is a string to split
+#' @param idx is the position of the split string to return, defaulting to 1
+#' @param sep_ is the pattern on which to split, defaulting to '-'
+my_extract <- function(chr, idx = 1, sep_ = "-") {
+  res <- str_split(string = chr, pattern = sep_, simplify = T)[, idx]
+  return(res)
+}
+
 #' @note reads in data from RAW GCT folder
 #' @param parent_dir_fn folder path for all the GCTs
 #' @param dataset_grp P100 or GCT, depending on datatype
-
-read_RAW_GCT <- function(parent_dir_fn,
+read_and_merge_gcts <- function(parent_dir_fn,
                          dataset_grp = "P100") {
-  # parent_dir_fn <- file.path(DATASETS_DIRECTORY, "RAW GCT")
+  # NOTE: read all the data from RAW GCT directory and
+  #' merge everything using library functions, not excel
+
+  # TEST: parent_dir_fn <- file.path(DATASETS_DIRECTORY, "RAW GCT")
   all_data_fns <- tibble(parent_dir = parent_dir_fn) %>%
     mutate(fn = map(parent_dir, function(pr) list.files(pr))) %>%
     unnest(cols = c(fn)) %>%
