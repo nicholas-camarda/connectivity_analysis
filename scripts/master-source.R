@@ -88,17 +88,18 @@ if (winos == 1){
 
 setwd(WORKING_DIRECTORY)
 
-
-
-message(qq("\n\nWORKING DIRECTORY [WORKING_DIRECTORY] = @{WORKING_DIRECTORY}"))
-message(qq("OUTPUT DIRECTORY [OUTPUT_DIRECTORY] = @{OUTPUT_DIRECTORY}"))
-
 REFERENCES_DIRECTORY <- file.path(CARDONC_DIRECTORY, "References")
 DATASETS_DIRECTORY <- file.path(CARDONC_DIRECTORY, "Datasets")
 
-message(qq("Cardio-oncology directory [CARDONC_DIRECTORY] = @{CARDONC_DIRECTORY}"))
-message(qq("References directory [REFERENCES_DIRECTORY] = @{REFERENCES_DIRECTORY}"))
-message(qq("Dasets directory [DATASETS_DIRECTORY] = @{DATASETS_DIRECTORY}"))
+print_important_directories <- function() {
+  message(qq("\n\nWorking directory [WORKING_DIRECTORY] = @{WORKING_DIRECTORY}"))
+  message(qq("Output directory [OUTPUT_DIRECTORY] = @{OUTPUT_DIRECTORY}"))
+  message(qq("Cardio-oncology directory [CARDONC_DIRECTORY] = @{CARDONC_DIRECTORY}"))
+  message(qq("References directory [REFERENCES_DIRECTORY] = @{REFERENCES_DIRECTORY}"))
+  message(qq("Datasets directory [DATASETS_DIRECTORY] = @{DATASETS_DIRECTORY}"))
+}
+
+print_important_directories()
 
 ## load helper functions ##
 source(file.path(WORKING_DIRECTORY, "scripts", "dendrograms.R"), local = T)

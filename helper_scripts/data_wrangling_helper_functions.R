@@ -1,4 +1,27 @@
 
+
+#' @note expects ref_dir to contain a file named [Drug Glossary_edited.xlsx]
+#' @param ref_dir REFERENCES_DIRECTORY
+create_my_drugs_df <- function(ref_dir = REFERENCES_DIRECTORY) {
+  drug_classes_fn <- file.path(ref_dir, "Drug Glossary_edited.xlsx")
+  cancer_drug_moa_df <- read_excel(path = drug_classes_fn, sheet = 1) %>%
+    filter(!is.na(Drug)) %>%
+    transmute(pert_iname = Drug, pert_class = Class, pert_category = "cancer")
+
+  cv_drug_moa_df <- read_excel(path = drug_classes_fn, sheet = 2) %>%
+    filter(!is.na(`Drug (Generic)`)) %>%
+    transmute(
+      pert_iname = `Drug (Generic)`,
+      pert_class = `Class`, pert_category = "cv"
+    )
+
+  drugs_moa_df <- bind_rows(cancer_drug_moa_df, cv_drug_moa_df) %>%
+    mutate(pert_iname = tolower(pert_iname)) %>%
+    distinct()
+  return(drugs_moa_df)
+}
+
+
 #' @note anonymous function GCT merge for merging two gct's
 #' @param dtf1 gctx1
 #' @param dtf2 gctx2

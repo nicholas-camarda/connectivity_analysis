@@ -213,8 +213,9 @@ compute_boot_pvclust <- function(x, parallel_flag = FALSE, n_boot = 1000) {
     method.dist = "cor",
     method.hclust = "average",
     quiet = TRUE,
-    nboot = n_boot, 
-    iseed = 2334, parallel = parallel_flag
+    nboot = n_boot,
+    iseed = 2334, 
+    parallel = parallel_flag
   )
   return(res)
 }
