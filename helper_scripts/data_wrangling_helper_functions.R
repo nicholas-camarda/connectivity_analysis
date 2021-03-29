@@ -1,27 +1,71 @@
 
+#' @note anonymous function for writing rds objects to file
+#' @param obj to write to rds
+#' @param dir_ full path to output directory, on which filename is made
+anon_write_to_file <- function(obj, dir_) {
+  dir.create(dir_, recursive = T, showWarnings = F)
+  type_ <- str_c(names(obj), collapse = "--")
+  fn <- file.path(dir_, qq("@{basename(dir_)}_@{type_}.rds"))
+  write_rds(x = obj, file = fn, compress = "gz")
+}
+
+#' @note function to cache objects using walk2
+#' @param dir_tbl df containing a column of list-obj to write,
+#' and a column of paths associated with their destinations
+#' @param target_col character string identifying obj-list column
+#' @param path_col character string identifying colum with paths for 
+#' associated obj-list column
+cache_objects <- function(dir_tbl, target_col = "lst",
+                          path_col = "path") {
+  message("Caching...")
+  # write to dirs
+  walk2(
+    .x = dir_tbl %>% pluck(target_col),
+    .y = dir_tbl %>% pluck(path_col),
+    .f = anon_write_to_file
+  )
+  message("Done.")
+}
+
 #' @note convenience function for creating output directory structures
+#' @param filter_vars from [filter_vars] 
 #' @param output_directory from global env
 #' @param dataset_type P100 or GCP
 #' @param grouping_var pert_iname, pert_class,
 #' etc for establishing sub directories
 #' @return lst containing specific_output_dir (top level),
 #' conncetivity_output_dir, and clust_output_dir
-create_output_directory_str <- function(output_directory,
-                                        dataset_type, grouping_var) {
+create_od_str <- function(filter_vars = c("Epigenetic", "Kinase Inhibitor"),
+                          output_directory = "~/output",
+                          dataset_type  = "P100", grouping_var = "pert_class") {
   message("Creating top output directory: ")
   specific_output_dir <- file.path(output_directory, dataset_type, grouping_var)
   dir.create(specific_output_dir, showWarnings = FALSE, recursive = TRUE)
   message(qq("@{specific_output_dir}"))
 
-  connectivity_output_dir <- file.path(specific_output_dir, "conn")
-  dir.create(connectivity_output_dir, showWarnings = FALSE, recursive = TRUE)
-  clust_output_dir <- file.path(specific_output_dir, "clust")
-  dir.create(connectivity_output_dir, showWarnings = FALSE, recursive = TRUE)
-  return(list(
-    "specific_output_dir" = specific_output_dir,
-    "connectivity_output_dir" = connectivity_output_dir,
-    "clust_output_dir" = clust_output_dir
-  ))
+  message("Creating subdirs: ")
+  message("corr | conn | clust")
+  dirs_to_make <- c("corr", "conn", "clust")
+
+  output_dirs_lst <- map(
+    filter_vars,
+    function(c) {
+      map_chr(dirs_to_make, function(d) {
+        file.path(specific_output_dir, c, d)
+      })
+    }
+  ) %>%
+    setNames(filter_vars) %>%
+      bind_rows(.) %>%
+      pivot_longer(everything(),
+        names_to = grouping_var, values_to = "path"
+      ) %>%
+      mutate(match = str_c(basename(path), "_lst"))
+  
+  walk(.x = output_dirs_lst$path, .f = dir.create,
+    showWarnings = FALSE, recursive = TRUE
+  )
+  return(output_dirs_lst)
 }
 
 #' @note collects arguments from analysis_args.csv

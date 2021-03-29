@@ -69,51 +69,39 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   full_splt_lst <- split(sub_obj, f = sub_obj[[sym(grouping_var)]])
   stopifnot(length(full_splt_lst) == length(filter_vars))
 
-  dir_lst <- create_output_directory_str(
+  output_dirs_lst <- create_od_str(filter_vars,
     output_directory,
     dataset_type, grouping_var
-  )
-
-  specific_output_dir <- dir_lst$specific_output_dir
-  connectivity_output_dir <- dir_lst$connectivity_output_dir
-  clust_output_dir <- dir_lst$clust_output_dir
+  ) 
 
   analysis_result_lst <- run_analysis(full_splt_lst,
     tie_method = "average", use_bootstrap = FALSE, use_parallel = TRUE
   )
 
   conn_clust_obj <- analysis_result_lst$output_results
-  tr_conn_clust_obj <- purrr::transpose(conn_clust_obj)
+  tbl_conn_clust_obj <- as_tibble(conn_clust_obj) %>%
+    mutate(name = filter_vars) %>% # can do this bc always in order...
+    rename(!!grouping_var := name) %>%
+    pivot_longer(corr_lst:clust_lst, names_to = "match", values_to = "lst")
 
-  output_dir_tbl <- tibble(name = names(tr_conn_clust_obj)) %>%
-    mutate(
-      s_connectivity_output_dir = file.path(connectivity_output_dir, name),
-      s_clust_output_dir = file.path(clust_output_dir, name)
-    )
+  res_paths_tbl <- suppressMessages(left_join(
+    output_dirs_lst,
+    tbl_conn_clust_obj
+  ))
+  stopifnot(nrow(res_paths_tbl) == nrow(tbl_conn_clust_obj))
+
+  
+  cache_objects(
+    dir_tbl = res_paths_tbl,
+    target_col = "lst", path_col = "path"
+  )
 
 
   # TODO: PLOT PVCLUST
   # TODO: HEATMAPS
   # TODO: CLUSTER HIERARCHY
 
-  anon_write_to_file <- function(obj, dir_) {
-    dir.create(dir_, recursive = T, showWarnings = F)
-    fn <- file.path(dir_, qq("@{basename(dir_)}_clust.rds"))
-    write_rds(x = obj, file = fn, compress = "gz")
-  }
-  message("Writing to files...")
-  # write to dirs
-  walk2(
-    sample_conn_clust_obj$conn_lst,
-    sample_conn_clust_obj$s_connectivity_output_dir, 
-    anon_write_to_file
-  )
-
-  walk2(
-    sample_conn_clust_obj$clust_lst,
-    sample_conn_clust_obj$s_clust_output_dir,
-    anon_write_to_file
-  )
+ 
   message("Done.")
 
   message("Caching full obj...")
