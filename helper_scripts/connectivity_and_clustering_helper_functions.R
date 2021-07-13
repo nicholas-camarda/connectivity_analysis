@@ -43,8 +43,13 @@ run_corr <- function(x, tie_method = "average") {
   # first convert to ranks, 
   # then compute pearson correlation with pairwise.complete.obs
   # try dense ties.method, might switch to average
-  rank <- matrixStats::rowRanks(transposed_x, ties.method = tie_method)
-  res <- cor(rank, method = "pearson", use = "pairwise.complete.obs")
+  # rank <- matrixStats::rowRanks(transposed_x, ties.method = tie_method)
+  # res <- cor(rank, method = "pearson", use = "pairwise.complete.obs")
+
+  # https://stackoverflow.com/questions/10711395/spearman-correlation-and-ties
+  # for lots of ties in data, use the kendall coefficient
+  res <- cor(transposed_x, method = "spearman", use = "pairwise.complete.obs")
+
   rownames(res) <- wide_x$replicate_id
   colnames(res) <- wide_x$replicate_id
 
@@ -52,6 +57,7 @@ run_corr <- function(x, tie_method = "average") {
     as.data.frame() %>%
     rownames_to_column() %>%
     as_tibble()
+  
   colnames(res_final1) <- c("unique_id_a", wide_x$replicate_id)
 
   look_up_df <- x_ungrouped %>%
@@ -78,66 +84,6 @@ run_corr <- function(x, tie_method = "average") {
 get_grp_names_from_matrix <- function(M, unique_cs, sep_ = "--") {
   grp_names <- str_split(unique_cs, pattern = sep_, simplify = T)[, 1]
   return(grp_names)
-}
-
-
-#' @note compute for cell A vs cell B and cell B vs all others (not B)
-#' @param a character identifier for 'group a'
-#' @param b character identifier for 'group b'
-#' @param use_bootstrap logical to calculate boostrapped p-value for the ks.test
-calc_conn <- function(a, b, my_mat, my_tib, use_bootstrap = FALSE) {
-    # a <- looper$group_a[5];
-    # b <- looper$group_b[5]
-    # message(a,b)
-
-     # A vs B
-    grp_col_idx_a <- my_tib %>% filter(grp_names == a) %>% .$cs_idx
-    grp_col_idx_b <- my_tib %>% filter(grp_names == b) %>% .$cs_idx
-    grp_sub_mat_ab_temp <- matrix(
-        c(grp_col_idx_a, grp_col_idx_b),
-        ncol = 2
-    )
-    grp_sub_mat_ab <- expand.grid(
-        grp_sub_mat_ab_temp[, 1],
-        grp_sub_mat_ab_temp[, 2]
-    ) %>%
-        as.matrix() %>%
-        unname()
-
-    # B vs all (except itself)
-    grp_col_idx_b <- my_tib %>% filter(grp_names == b) %>% .$cs_idx
-    grp_col_idx_all <- my_tib %>% filter(grp_names != b) %>% .$cs_idx
-    grp_sub_mat_b_all <- matrix(
-        c(
-            rep(grp_col_idx_b, times = length(grp_col_idx_all)),
-            rep(grp_col_idx_all, each = length(grp_col_idx_b))
-        ),
-        ncol = 2
-    ) %>%
-        as.matrix() %>%
-        unname()
-    
-    test <- my_mat[grp_sub_mat_ab]
-    bkg <- my_mat[grp_sub_mat_b_all]
-
-    if (use_bootstrap) {
-        res <- ks.boot(test, bkg,
-            nboots = 1000, alternative = "two.sided"
-        )
-        connectivity <- res$ks$statistic
-        p_val <- res$ks.boot.pvalue
-    } else {
-        res <- ks.test(test, bkg, alternative = "two.sided")
-        connectivity <- res$statistic
-        p_val <- res$p.value
-    }
-
-    if (median(test, na.rm = T) < median(bkg, na.rm = T)) {
-        connectivity <- -1 * connectivity
-    }
-    
-    conn_sub_obj <- tibble(conn = connectivity, p_val = p_val)
-    return(conn_sub_obj)
 }
 
 #' @note collapse connectivity between pairs by taking the median
@@ -167,6 +113,77 @@ calc_conn_by_median <- function(m) {
   return(symm_med_m)
 }
 
+#' @note compute for cell A vs cell B and cell B vs all others (not B)
+#' @param a character identifier for 'group a'
+#' @param b character identifier for 'group b'
+#' @param use_bootstrap logical to calculate boostrapped p-value for the ks.test
+calc_conn <- function(a, b, my_mat, my_tib, use_bootstrap = FALSE) {
+  # a <- looper$group_a[5];
+  # b <- looper$group_b[5]
+  # message(a,b)
+
+  # A vs B
+  grp_col_idx_a <- my_tib %>% filter(grp_names == a) %>% .$cs_idx
+  grp_col_idx_b <- my_tib %>% filter(grp_names == b) %>% .$cs_idx
+
+  # B vs all (except itself)
+  grp_col_idx_b <- my_tib %>% filter(grp_names == b) %>% .$cs_idx
+  grp_col_idx_all <- my_tib %>% filter(grp_names != b) %>% .$cs_idx
+
+  m <- matrix(NA,
+    nrow = nrow(my_tib), ncol = nrow(my_tib)
+  )
+  m[grp_col_idx_a, grp_col_idx_b] <- 5
+  m[grp_col_idx_b, grp_col_idx_all] <- 1
+  m_outer <- outer(seq_len(nrow(m)), seq_len(ncol(m)),
+    FUN = "paste", sep = ","
+  )
+  # temp <- matrix(1:20, nrow = 4, ncol = 5)
+  # temp_outer <- outer(seq_len(nrow(temp)), seq_len(ncol(temp)),
+  #   FUN = "paste", sep = ","
+  # )
+
+  # visualize which parts of the matrix are being used for connectivity
+
+  # fill in (color 1) for A vs B
+  # fill in (color 2) for B vs all
+  # ht <- ComplexHeatmap::Heatmap(m, name = "mat vis",
+  #   na_col = "white", border = TRUE,
+  #   cell_fun = function(j, i, x, y, width, height, fill) {
+  #     if (!is.na(m[i, j])) {
+  #       grid.text(sprintf("%s", m_outer[i, j]), x, y, gp = gpar(fontsize = 10))
+  #     }
+  #   },
+  #   cluster_rows = FALSE, cluster_columns = FALSE, use_raster = TRUE,
+  # )
+  # draw(ht)
+  # pdf(qq("~/Downloads/heatmap_@{a}-@{b}.pdf"), width = 8, height = 8)
+  # dev.off()
+
+  
+  test <- my_mat[grp_col_idx_a, grp_col_idx_b]
+  bkg <- my_mat[grp_col_idx_b, grp_col_idx_all]
+
+  if (use_bootstrap) {
+      res <- ks.boot(test, bkg,
+          nboots = 1000, alternative = "two.sided"
+      )
+      connectivity <- res$ks$statistic
+      p_val <- res$ks.boot.pvalue
+  } else {
+      res <- ks.test(test, bkg, alternative = "two.sided")
+      connectivity <- res$statistic
+      p_val <- res$p.value
+  }
+
+  if (median(test, na.rm = T) < median(bkg, na.rm = T)) {
+      connectivity <- -1 * connectivity
+  }
+  
+  conn_sub_obj <- tibble(conn = connectivity, p_val = p_val)
+  return(conn_sub_obj)
+}
+
 #' @note run connectivity analysis using the helper function [calc_conn]
 #' @param m matrix of correlation values, must be numeric and symmetric
 #' @param use_bootstrap logical to calculate boostrapped p-value for the ks.test
@@ -189,7 +206,7 @@ run_conn <- function(mat, use_bootstrap = FALSE) {
   conn_df <- looper %>%
       mutate(map2_df(
           .x = group_a, .y = group_b,
-          .f = calc_conn, 
+          .f = calc_conn,
           my_mat = mat, my_tib = cs_tib, 
           use_bootstrap = use_bootstrap
       )) %>%
@@ -208,8 +225,8 @@ run_conn_lst <- function(lst, use_bootstrap = FALSE) {
     # global assign
   message("Computing connectivity...")
   # need the matrix form, not tibble --> transpose
-  mat <- purrr::transpose(lst)$matrix
-  connectivity_lst_obj <- map(mat, run_conn, use_bootstrap = use_bootstrap)
+  mats <- purrr::transpose(lst)$matrix
+  connectivity_lst_obj <- map(mats, run_conn, use_bootstrap = use_bootstrap)
   message("Done.")
   return(connectivity_lst_obj)
 }
@@ -316,7 +333,12 @@ run_analysis <- function(lst, tie_method = "average",
   p <- progressr::progressor(steps = 4)
   p(message = "Computing correlation")
   corr_lst <- run_corr_lst(lst, tie_method = tie_method)
+  
   p(message = "Computing connectivity")
+
+  # DEBUG REMOVED
+  stop("Debug here")
+
   conn_lst <- run_conn_lst(corr_lst, use_bootstrap = use_bootstrap)
   p(message = "Clustering")
   clust_lst <- run_clust_lst(conn_lst, use_parallel = use_parallel)
@@ -328,3 +350,4 @@ run_analysis <- function(lst, tie_method = "average",
   )
   return(res)
 }
+

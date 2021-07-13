@@ -1,3 +1,4 @@
+
 library(tidyverse)
 library(data.table)
 library(readxl)
@@ -36,7 +37,7 @@ library(limma)
 
 library(BiocParallel)
 library(conflicted)
-library(showtext)
+# library(showtext)
 
 set.seed(42) 
 # ncores <- 6

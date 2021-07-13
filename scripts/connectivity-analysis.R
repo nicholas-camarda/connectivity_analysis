@@ -1,5 +1,5 @@
 # source the init.R file first
-source(file.path("scripts/init.R"))
+source(file.path("scripts", "init.R"))
 
 cat("\nReading and merging data...")
 #' @note cmapR help functions https://rdrr.io/github/cmap/cmapR/man/
@@ -72,10 +72,12 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   output_dirs_lst <- create_od_str(filter_vars,
     output_directory,
     dataset_type, grouping_var
-  ) 
+  )
 
   analysis_result_lst <- run_analysis(full_splt_lst,
-    tie_method = "average", use_bootstrap = FALSE, use_parallel = TRUE
+    tie_method = "dense", 
+    use_bootstrap = FALSE, 
+    use_parallel = TRUE
   )
 
   conn_clust_obj <- analysis_result_lst$output_results
@@ -83,6 +85,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     mutate(name = filter_vars) %>% # can do this bc always in order...
     rename(!!grouping_var := name) %>%
     pivot_longer(corr_lst:clust_lst, names_to = "match", values_to = "lst")
+  
 
   res_paths_tbl <- suppressMessages(left_join(
     output_dirs_lst,
@@ -90,12 +93,12 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   ))
   stopifnot(nrow(res_paths_tbl) == nrow(tbl_conn_clust_obj))
 
-  
   cache_objects(
     dir_tbl = res_paths_tbl,
     target_col = "lst", path_col = "path"
   )
 
+  
 
   # TODO: PLOT PVCLUST
   # TODO: HEATMAPS

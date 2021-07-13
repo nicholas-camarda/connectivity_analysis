@@ -1,9 +1,0 @@
-"0","```r
-remove_bad_days_df1 <- data %>%
-  group_by(`Specimen Name`, Date) %>%
-  summarize(n = n())
-
-removed_df <- inner_join(remove_bad_days_df1 %>% filter(n < 7), remove_bad_days_df1)
-print(\"Removed days:\")
-print(removed_df)
-```"
