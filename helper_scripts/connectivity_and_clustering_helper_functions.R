@@ -1,3 +1,5 @@
+
+
 #' @note helper function for compute_boot_pvclust and morpheus plotter
 #' @param long_df to be converted to matrix -- [assumes long df is a connectivity df!]
 #' @return numeric matrix, symmetric
@@ -6,7 +8,9 @@ make_numeric_mat <- function(long_df) {
     long_df <- long_df %>% dplyr::select(-p_val)
   }
   x <- long_df %>%
-    pivot_wider(names_from = group_b, values_from = conn) %>%
+    pivot_wider(names_from = group_b, 
+                values_from = conn, 
+                values_fn = median) %>%
     as.data.frame() %>%
     dplyr::select(-group_a) %>%
     as.matrix()
@@ -29,52 +33,51 @@ run_corr <- function(x, tie_method = "average") {
   # x <- full_splt_lst[[1]]
   x_ungrouped <- x %>%
     ungroup()
+  # 
+  # stop('debug')
+  
   wide_x <- x_ungrouped %>%
-    dplyr::select(master_id, replicate_id, pr_gene_symbol, value) %>%
-    pivot_wider(names_from = pr_gene_symbol, values_from = value)
-
+    dplyr::select(replicate_id, pr_gene_symbol, value) %>%
+    pivot_wider(names_from = pr_gene_symbol, 
+                values_from = value, 
+                values_fn = median); wide_x
+  
   transposed_x <- wide_x %>%
-    dplyr::select(-master_id, -replicate_id) %>%
+    dplyr::select(-replicate_id) %>%
     t() %>%
     # unnaming the large matrix results
     # in massive performance upgrade
     unname()
-
-  # first convert to ranks, 
-  # then compute pearson correlation with pairwise.complete.obs
-  # try dense ties.method, might switch to average
-  # rank <- matrixStats::rowRanks(transposed_x, ties.method = tie_method)
-  # res <- cor(rank, method = "pearson", use = "pairwise.complete.obs")
-
-  # https://stackoverflow.com/questions/10711395/spearman-correlation-and-ties
-  # for lots of ties in data, use the kendall coefficient
+  
+  # data has been log transformed, so must be spearman bc rho doesn't 
+  # change with monotonic transfromation; pearson DOES!
   res <- cor(transposed_x, method = "spearman", use = "pairwise.complete.obs")
-
+  
   rownames(res) <- wide_x$replicate_id
   colnames(res) <- wide_x$replicate_id
-
+  
   res_final1 <- res %>%
     as.data.frame() %>%
     rownames_to_column() %>%
     as_tibble()
   
   colnames(res_final1) <- c("unique_id_a", wide_x$replicate_id)
-
+  
   look_up_df <- x_ungrouped %>%
     distinct(master_id, replicate_id)
-
+  
   res_final2 <- res_final1 %>%
     pivot_longer(
       cols = colnames(res_final1)[-1],
       names_to = "unique_id_b", values_to = "corr"
     ) %>%
     right_join(look_up_df %>%
-      dplyr::rename(group_a = master_id, unique_id_a = replicate_id),
-    by = "unique_id_a"
+                 dplyr::rename(group_a = master_id, unique_id_a = replicate_id),
+               by = "unique_id_a"
     ) %>%
     right_join(look_up_df %>%
-      dplyr::rename(group_b = master_id, unique_id_b = replicate_id),
-    by = "unique_id_b"
+                 dplyr::rename(group_b = master_id, unique_id_b = replicate_id),
+               by = "unique_id_b"
     )
   return(list("matrix" = res, "tibble" = res_final2))
 }
@@ -94,7 +97,7 @@ calc_conn_by_median <- function(m) {
   if (!is.matrix(m)) {
     m <- make_numeric_mat(m)
   }
-
+  
   comps <- length(colnames(m))
   # here conn is really med_conn
   df <- tibble() # p_val/conn for compatability issues
@@ -120,64 +123,35 @@ calc_conn_by_median <- function(m) {
 calc_conn <- function(a, b, my_mat, my_tib, use_bootstrap = FALSE) {
   # a <- looper$group_a[5];
   # b <- looper$group_b[5]
+  # my_mat = mat;  my_tib = cs_tib
   # message(a,b)
-
   # A vs B
   grp_col_idx_a <- my_tib %>% filter(grp_names == a) %>% .$cs_idx
   grp_col_idx_b <- my_tib %>% filter(grp_names == b) %>% .$cs_idx
-
+  
   # B vs all (except itself)
   grp_col_idx_b <- my_tib %>% filter(grp_names == b) %>% .$cs_idx
-  grp_col_idx_all <- my_tib %>% filter(grp_names != b) %>% .$cs_idx
-
-  m <- matrix(NA,
-    nrow = nrow(my_tib), ncol = nrow(my_tib)
-  )
-  m[grp_col_idx_a, grp_col_idx_b] <- 5
-  m[grp_col_idx_b, grp_col_idx_all] <- 1
-  m_outer <- outer(seq_len(nrow(m)), seq_len(ncol(m)),
-    FUN = "paste", sep = ","
-  )
-  # temp <- matrix(1:20, nrow = 4, ncol = 5)
-  # temp_outer <- outer(seq_len(nrow(temp)), seq_len(ncol(temp)),
-  #   FUN = "paste", sep = ","
-  # )
-
-  # visualize which parts of the matrix are being used for connectivity
-
-  # fill in (color 1) for A vs B
-  # fill in (color 2) for B vs all
-  # ht <- ComplexHeatmap::Heatmap(m, name = "mat vis",
-  #   na_col = "white", border = TRUE,
-  #   cell_fun = function(j, i, x, y, width, height, fill) {
-  #     if (!is.na(m[i, j])) {
-  #       grid.text(sprintf("%s", m_outer[i, j]), x, y, gp = gpar(fontsize = 10))
-  #     }
-  #   },
-  #   cluster_rows = FALSE, cluster_columns = FALSE, use_raster = TRUE,
-  # )
-  # draw(ht)
-  # pdf(qq("~/Downloads/heatmap_@{a}-@{b}.pdf"), width = 8, height = 8)
-  # dev.off()
-
+  grp_col_idx_all <- my_tib %>% filter(!(grp_names %in% c(a, b))) %>% .$cs_idx
+  
   
   test <- my_mat[grp_col_idx_a, grp_col_idx_b]
   bkg <- my_mat[grp_col_idx_b, grp_col_idx_all]
-
+  
   if (use_bootstrap) {
-      res <- ks.boot(test, bkg,
-          nboots = 1000, alternative = "two.sided"
-      )
-      connectivity <- res$ks$statistic
-      p_val <- res$ks.boot.pvalue
+    message("Using bootstrap...")
+    res <- ks.boot(test, bkg,
+                   nboots = 1000, alternative = "two.sided"
+    )
+    connectivity <- res$ks$statistic
+    p_val <- res$ks.boot.pvalue
   } else {
-      res <- ks.test(test, bkg, alternative = "two.sided")
-      connectivity <- res$statistic
-      p_val <- res$p.value
+    res <- ks.test(test, bkg, alternative = "two.sided")
+    connectivity <- res$statistic
+    p_val <- res$p.value
   }
-
+  
   if (median(test, na.rm = T) < median(bkg, na.rm = T)) {
-      connectivity <- -1 * connectivity
+    connectivity <- -1 * connectivity
   }
   
   conn_sub_obj <- tibble(conn = connectivity, p_val = p_val)
@@ -191,38 +165,48 @@ calc_conn <- function(a, b, my_mat, my_tib, use_bootstrap = FALSE) {
 run_conn <- function(mat, use_bootstrap = FALSE) {
   # mat <- sample_corr_lst$Epigenetic$matrix
   if (!is.matrix(mat)) mat <- make_numeric_mat(mat)
-
+  
   unique_cs <- unique(rownames(mat))
   grp_names <- get_grp_names_from_matrix(mat, unique_cs, sep_ = "--")
-
+  
   cs_idx <- seq_len(length(rownames(mat)))
   cs_tib <- tibble(unique_cs, cs_idx, grp_names)
   looper <- expand.grid(
     group_a = unique(grp_names),
     group_b = unique(grp_names)
   )
-
+  
   if (use_bootstrap) message("Using ks.boot")
   conn_df <- looper %>%
-      mutate(map2_df(
-          .x = group_a, .y = group_b,
-          .f = calc_conn,
-          my_mat = mat, my_tib = cs_tib, 
-          use_bootstrap = use_bootstrap
-      )) %>%
-      as_tibble()
- 
-  median_mat <- calc_conn_by_median(conn_df)
-
+    mutate(map2_df(
+      .x = group_a, .y = group_b,
+      .f = calc_conn,
+      my_mat = mat, my_tib = cs_tib, 
+      use_bootstrap = use_bootstrap
+    )) %>%
+    as_tibble()
   
-  return(list("conn_tbl" = conn_df, "conn_median_mat" = median_mat))
+  median_mat <- calc_conn_by_median(conn_df)
+  rnames <- rownames(median_mat)
+  # stop("debug")
+  conn_tbl_median <- median_mat %>% 
+    as.data.frame() %>%
+    rownames_to_column(var = "group_a") %>% 
+    as_tibble() %>%
+    pivot_longer(cols = all_of(rnames), 
+                 names_to = "group_b", values_to = "median_conn")
+  
+  
+  return(list("conn_tbl" = conn_df, 
+              "conn_median_mat" = median_mat,
+              "conn_tbl_median" = conn_tbl_median))
 }
 
 #' @note runn connectivity analysis over a list of matrices
 #' @param lst list of correlation matrices
 #' @return connectivity long_df
 run_conn_lst <- function(lst, use_bootstrap = FALSE) {
-    # global assign
+  # global assign
   message("Computing connectivity...")
   # need the matrix form, not tibble --> transpose
   mats <- purrr::transpose(lst)$matrix
@@ -248,19 +232,24 @@ run_clust_lst <- function(lst, use_parallel = FALSE) {
 run_clust <- function(mat, use_parallel = FALSE) {
   # mat <- sample_conn_obj$conn_lst[[1]]$conn_median_mat
   mat <- force_natural(mat)
+  
+  # stop("debug")
+  print(Heatmap(mat))
+  
   pv_obj <- compute_boot_pvclust(
     x = mat,
-    parallel_flag = use_parallel, n_boot = 1000
+    parallel_flag = use_parallel, 
+    n_boot = 1000
   )
-
+  
   # dendro_cut_thresh is global
   named_clusters <- generate_clusters(
     x = pv_obj,
     thresh = dendro_cut_thresh
   )
-
+  
   co_clust_bool <- co_cluster(named_clusters)
-
+  
   res <- list(
     "clust_obj" = pv_obj,
     "cluster_assignments" = named_clusters,
@@ -278,14 +267,26 @@ compute_boot_pvclust <- function(x, parallel_flag = FALSE, n_boot = 1000) {
     message("Not enough data to perform clustering analysis.")
     return(NULL)
   }
+  
+  # stop("debug")
   res <- pvclust(x,
-    method.dist = "cor",
-    method.hclust = "average",
-    quiet = TRUE,
-    nboot = n_boot,
-    iseed = 2334,
-    parallel = parallel_flag
+                 method.dist = "correlation",
+                 method.hclust = "average", 
+                 # weight = TRUE,
+                 quiet = TRUE,
+                 nboot = n_boot,
+                 iseed = 2334,
+                 parallel = parallel_flag
   )
+  
+  # db <- fpc::dbscan(x, eps = 0.35, MinPts = 5)
+  # plot(db, x, main = "DBSCAN", frame = FALSE)
+  # dbscan::kNNdistplot(x, k =  5)
+  # abline(h = 0.3, lty = 2)
+  # plot(res)
+  # # msplot(res)
+  # pvpick(res)
+  
   return(res)
 }
 
@@ -324,30 +325,353 @@ co_cluster <- function(cut_tree_obj, name1 = "HAoSMC", name2 = "HUVEC") {
   return(res)
 }
 
+
+run_diffe_lst <- function(lst, clust_lst) {
+  message("\n")
+  diffe_lst_obj <- purrr::pmap(list(lst, clust_lst, names(lst)), 
+                        .f = run_diffe)
+  message("Done.")
+  return(diffe_lst_obj)
+}
+
+#' @note run differential expression on dat
+#' @param dat tbl containing raw data
+#' @param cob list obj containing results of clustering analysis
+#' @param dname grouping_var, e.g. Kinase inhibitor or dmso, for naming the plot
+run_diffe <- function(dat, cob, dname) {
+  # dat <- lst$`Kinase inhibitor`; cob <- clust_lst$`Kinase inhibitor`; dname <- "Kinase inhibitor"; 
+  
+  # base_output_dir <- lst$data
+  # which_dat <- "P100"
+  
+  
+  # stop()
+  which_dat <- unique(force_natural(dat$which_dat))
+  message(qq("Computting differential expression on @{dname}, @{which_dat}"))
+  
+  mat_tbl <- dat %>% 
+    dplyr::select(replicate_id, cell_id, pert_iname, pert_class, pr_gene_symbol, value) %>%
+    ungroup() 
+  
+  clust_assignments <- cob$cluster_assignments
+  # join clusters and annotations
+  ca_df_temp <- create_ca_df(ca = clust_assignments) %>%
+    rename(base_clust_comp = cluster); ca_df_temp
+  
+  # # which cluster(s) are vascular cells in
+  # which_cluster_vasc_df <- ca_df_temp %>% 
+  #   filter(cell_id %in% c("HUVEC", "HAoSMC"))
+  
+  # get cluster labels
+  clust_label_df <- ca_df_temp %>% 
+    group_by(base_clust_comp) %>%
+    summarize(base_clust_comp_name = str_c(sort(unique(cell_id)), 
+                                           collapse = ","), 
+              .groups = "keep") %>%
+    ungroup() %>%
+    arrange(base_clust_comp) 
+  
+  ca_df <- left_join(ca_df_temp, clust_label_df, by="base_clust_comp")
+  
+  dat_ <- dat %>% 
+    left_join(ca_df, by=c("cell_id")) 
+  
+  clusts_int_vec <- clust_label_df$base_clust_comp
+  
+  
+  matrix_for_diffe <- mat_tbl %>%
+    left_join(ca_df, by = "cell_id") %>%
+    dplyr::select(replicate_id, cell_id, pert_iname, pert_class, 
+                  base_clust_comp, base_clust_comp_name, value, pr_gene_symbol) %>%
+    pivot_wider(names_from = pr_gene_symbol, 
+                values_from = value, 
+                values_fn = median) # need this in case dups with different values
+  
+  feature_names <- dat_ %>% ungroup() %>% .$pr_gene_symbol %>% unique()
+  
+  # print(dat_)
+  # print(cob)
+  # print(dname)
+  # stop("help")
+  p2 <- progressr::progressor(steps = length(clusts_int_vec)*length(feature_names) )
+  message("Computing differential analytes..")
+  diffe_by_clust_df <- map_df(clusts_int_vec, function(ith_cluster){
+    # ith_cluster <- clusts_int_vec[1]
+    
+    base_clust_comp_name <- clust_label_df %>% 
+      dplyr::select(base_clust_comp, base_clust_comp_name) %>% # take the correct cluster naming convention column
+      filter(base_clust_comp == ith_cluster) %>% # take the correct name according to the cluster integer
+      distinct(base_clust_comp_name) %>% # non-vascular clusters need to get lumped together, we just want the unique cluster assign
+      pluck(1) # make it a character vector 
+    
+    message(str_c("\nCluster ID:",ith_cluster, "\n#", base_clust_comp_name, sep =" "))
+    p2()
+    
+    cluster_res <- map2_df(feature_names, ith_cluster, function(k, i){
+      # k <- feature_names[1]; i <- ith_cluster[1]
+      # 
+      # DEBUG: 
+      # message(k)
+      
+      c1 <- matrix_for_diffe %>% filter(base_clust_comp == i) %>% pluck(k)
+      c2 <- matrix_for_diffe %>% filter(base_clust_comp != i) %>% pluck(k)
+      
+      # dens_dat <- tibble(c = c(c1, c2), g = c(rep("c1", length(c1)), rep("c2", length(c2))))
+      # ggecdf(data = dens_dat, x = "c", color = "g", ggtheme = theme_bw(), palette = "jco")
+      # 
+      n_non_na_vec1 <- length(c1[!is.na(c1)]); n_non_na_vec1
+      n_non_na_vec2 <- length(c2[!is.na(c2)]); n_non_na_vec2
+      
+      if (n_non_na_vec1 < 1 | n_non_na_vec2 < 1) {
+        # message("Not enough data to compute diffe for ", k)
+        res <- tibble(analyte = k, 
+                      logFC = NA, base_clust_comp = as.integer(i), 
+                      base_clust_comp_name = base_clust_comp_name, 
+                      ks_statistic = NA, 
+                      ks_boot_statistic = NA, 
+                      signal_to_noise_statistic = NA,
+                      directional_stat = NA, 
+                      p_val = NA, p_val_boot = NA,
+                      p_val_bh = NA,
+                      p_val_boot_bh = NA, 
+                      signif = NA) %>%
+          mutate(k_clust_dat = list(c1), 
+                 all_others_dat = list(c2))
+        
+        # cat("*")
+        return(res)
+      }
+      
+      ks <- ks.test(c1, c2, alternative = "two.sided", tol = 1e-8); ks
+      ks_boot <- ks.boot(c1, c2, nboots = 1000, alternative = "two.sided"); ks_boot
+      
+      
+      # LINCS espouses the concept of making different data levels available for public use.  Different data levels correspond different steps along our processing workflow.  The LINCS PCCSE levels are defined as follows:
+      # Level 0 - Raw Mass Spectrometry Data (LCMS) - will be available through a chorusproject.org repository in the future
+      # Level 1 - Probe Reads (SKY) - Curated Skyline documents; available on this website, including metadata
+      # Level 2 - Raw Numerical Data (RPT) - Matrix data of extracted signal ratios of endogenous probes vs. internal standards (log2 transformed); available on this website, including metadata
+      # Level 3 - Normalized and QC'ed Numerical Data (QCNORM) - Matrix data derived from Level 2 after automated processing and normalization
+      # Level 4 - Differential Quantification (DIFF) - Matrix data of Level 3 with plate-wide median ratio of each analyte subtracted from each sample; available on this website, including metadata 
+      
+      # compute ks stat
+      #quantifies the distance between the empirical distribution of given two samples
+      stat <- ks$statistic
+      stat_boot <- ks_boot$ks$statistic
+      
+      c1_median <- median(c1, na.rm = T); c1_median
+      c2_median <- median(c2, na.rm = T); c2_median
+      
+      #' @note assumes data are already log transformed!!! 
+      #' So a fold change is simply a difference, not a division!!
+      #' is this the correct way to calculate diffex??
+      #' 
+      logfc <- median(c1, na.rm = T) -  median(c2, na.rm = T) ; logfc
+      d_stat <- ifelse(logfc > 0, "++", "--")
+      
+      min_x <- min(c(min(c1, na.rm = T), min(c2, na.rm = T)))
+      max_x <- max(c(max(c1, na.rm = T), max(c2, na.rm = T)))
+      
+      c1_names_df <- matrix_for_diffe %>% 
+        filter(base_clust_comp == i) %>% 
+        mutate(id = str_c(base_clust_comp_name, pert_iname, sep = "-"),
+               plot_clust_id = 1) %>%
+        dplyr::select(plot_clust_id, id, all_of(k)) %>%
+        rename(value := !!sym(k)); c1_names_df
+      
+      c2_names_df <- matrix_for_diffe %>% 
+        filter(base_clust_comp != i) %>% 
+        mutate(id = str_c(base_clust_comp_name, pert_iname, sep = "-"),
+               plot_clust_id = 2) %>%
+        dplyr::select(plot_clust_id, id, all_of(k)) %>%
+        rename(value := !!sym(k)); c2_names_df
+      
+      # compute signal to noise
+      mean_grp_diff <- mean(c2, na.rm = T) - mean(c1, na.rm = T)
+      sum_grp_sd <- sd(c2, na.rm = T) + sd(c1, na.rm = T)
+      signal_to_nose <- mean_grp_diff / sum_grp_sd
+      
+      #'@note I'm pretty sure we want to adjust the p-values per cluster comparison... 
+      res <- tibble(analyte = k,  logFC = logfc, base_clust_comp = i, 
+                    base_clust_comp_name = base_clust_comp_name, 
+                    ks_statistic = stat, 
+                    ks_boot_statistic = stat_boot, 
+                    signal_to_noise_statistic = signal_to_nose,
+                    directional_stat = d_stat, 
+                    p_val = ks$p.value, p_val_boot = ks_boot$ks.boot.pvalue,
+                    p_val_bh = p.adjust(ks$p.value, method = "BH"),
+                    p_val_boot_bh = p.adjust(ks_boot$ks.boot.pvalue, method = "BH")) %>%
+        mutate(signif = p_val_boot_bh < bh_thresh_val) %>%
+        mutate(k_clust_dat = list(c1), 
+               all_others_dat = list(c2))
+      
+      # na_omit_res <- res %>% na.omit()
+      p2()
+      # cat(".")
+      return(res)
+    }) 
+    # cat(".Done\n")
+    
+    return(cluster_res)
+  }) 
+  
+  stopifnot(nrow(diffe_by_clust_df) > 0)
+  
+  phosphosite_meta <- dat_ %>% 
+    ungroup() %>%
+    dplyr::distinct( pr_gene_symbol, pr_gene_id, mark) %>%
+    rename(analyte = pr_gene_symbol)
+  
+  diffe_final_res <- diffe_by_clust_df  %>%
+    left_join(phosphosite_meta, by = "analyte") %>%
+    dplyr::select(analyte, pr_gene_id, mark, everything()) %>%
+    mutate(label_ = str_c("p",str_c(mark, analyte,sep =" ")), sep="") %>%
+    mutate(signif_and_fold = ifelse(signif & logFC > 0.5, T, ifelse(signif & logFC < -0.5, T, F))) %>% 
+    dplyr::select(signif_and_fold, signif, logFC, everything()) ; diffe_final_res
+  
+  # THIS DOESN"T WORK UGH ONLY GET EVERYTHING OUTSIDE OF 0.5!!!
+  signif_df <- diffe_final_res %>% filter(signif_and_fold); nrow(signif_df)
+  # save this plot
+  diffe_g <- ggplot(diffe_final_res %>% na.omit()) + 
+    geom_point(aes(x = logFC, y = -log10(p_val_boot_bh), color = directional_stat)) +
+    geom_vline(xintercept=c(-0.5, 0.5), col="purple", alpha = 0.5) +
+    geom_hline(yintercept=-log10(0.1), col="red", alpha = 0.5) +
+    geom_label_repel(signif_df,
+                     mapping = aes(x = logFC, y = -log10(p_val_boot_bh), label = label_), force = 5,
+                     min.segment.length = unit(0, 'lines')) +
+    scale_color_manual(values = RColorBrewer::brewer.pal(3, "Set1")) +
+    theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5, size = 25, face = "bold"),
+          plot.subtitle = element_text(hjust = 0.5, size = 15, face = "bold"),
+          axis.title = element_text(size = 15),
+          axis.text = element_text(size = 10)) +
+    guides(size = FALSE) + 
+    labs(color = "Directional change", 
+         caption = "BH.q.val = Benjamini-Hochberg-Corrected P-value (q) \nCut-off for displaying label: q < 0.1 \nDifference between groups calculated using ks.test()") +
+    ylab("-Log10(BH.q.val)") +
+    xlab("Log2(Fold Change)") + 
+    ggtitle(label = qq("@{toupper(which_dat)}, @{dname}"))
+  
+  if (nrow(clust_label_df) > 1) {
+    diffe_g <- diffe_g +
+      facet_grid(~base_clust_comp_name) 
+  }
+  diffe_g
+  # message("Done")
+
+  return(list(diffe_final_res, diffe_g) %>% 
+           setNames(c("diffe_final_res", "diffe_ggplot")))
+}
+
 #' @note run connectivity and clustering analysis, with progress updates
 #' @param lst a list of tbl's split by the grouping structure for the given analysis
 #' @return result containing the input data, corr_lst (correlation results),
 #' conn_lst (connectivity results), and clust_lst (clustering results)
 run_analysis <- function(lst, tie_method = "average",
                          use_bootstrap = FALSE, use_parallel = FALSE) {
-  p <- progressr::progressor(steps = 4)
+  p <- progressr::progressor(steps = 3)
   p(message = "Computing correlation")
   corr_lst <- run_corr_lst(lst, tie_method = tie_method)
   
   p(message = "Computing connectivity")
-
-  # DEBUG REMOVED
-  stop("Debug here")
-
   conn_lst <- run_conn_lst(corr_lst, use_bootstrap = use_bootstrap)
+  
   p(message = "Clustering")
   clust_lst <- run_clust_lst(conn_lst, use_parallel = use_parallel)
+  
+  # message("Computing differential expression")
+  diffe_lst <- run_diffe_lst(lst, clust_lst)
   message("Done")
-
+  
   res <- list(
-    "input_data" = lst, "output_results" = list("corr_lst" = corr_lst,
-    "conn_lst" = conn_lst, "clust_lst" = clust_lst)
+    "input_data" = lst, 
+    "output_results" = list("corr_lst" = corr_lst,
+                            "conn_lst" = conn_lst, 
+                            "clust_lst" = clust_lst,
+                            "diffe_lst" = diffe_lst)
   )
   return(res)
 }
 
+
+
+update_dataset_with_clustering <- function(data, clust_lst) {
+  cell_ids <- names(clust_lst$cluster_assignments)
+  clust_id_df <- tibble(cell_id = cell_ids, cut_trees = clust_lst$cluster_assignments )
+  return(data %>% left_join(clust_id_df, by = "cell_id"))
+}
+
+
+
+
+
+
+
+#' #' @NOTE: this is SO SO slow
+#' #' @note compute for cell A vs cell B and cell B vs all others (not A)
+#' #' @param cell_corr matrix of correlations among cells
+#' #' @param use_bootstrap logical to calculate boostrapped p-value for the ks.test
+#' compute_connectivity <- function(M, use_bootstrap = FALSE) {
+#'   
+#'   # M <- corr_mat_reps %>% slice(1) %>% .$cell_corr_r_mat ; M <- M[[1]]
+#'   
+#'   unique_cs <- unique(rownames(M))
+#'   grp_names <- get_grp_names_from_matrix(M, unique_cs)
+#'   unique_cs_idx <- 1:length(rownames(M))
+#'   
+#'   cs_tib <- tibble(unique_cs, unique_cs_idx, grp_names)
+#'   
+#'   grp_idx <- bind_cols(tibble(
+#'     grp_names = unique(grp_names),
+#'     grp_idx = 1:length(unique(grp_names))
+#'   ))
+#'   
+#'   cs_tib <- left_join(cs_tib, grp_idx, by = "grp_names")
+#'   looper <- expand.grid(grp_namesA = unique(cs_tib$grp_names), grp_namesB = unique(cs_tib$grp_names))
+#'   
+#'   if (use_bootstrap) message("Using ks.boot")
+#'   conn_df <- looper %>%
+#'     mutate(map2_df(grp_namesA, grp_namesB, function(x, y) {
+#'       # x <- looper$grp_namesA[5]; y <- looper$grp_namesB[5]
+#'       
+#'       grpA_idx1 <- cs_tib %>%
+#'         filter(grp_names == x) %>%
+#'         .$unique_cs_idx
+#'       
+#'       grpB_idx2 <- cs_tib %>%
+#'         filter(grp_names == y) %>%
+#'         .$unique_cs_idx
+#'       
+#'       test <- M[grpA_idx1, grpB_idx2]
+#'       
+#'       grpA_idx2 <- cs_tib %>%
+#'         filter(grp_names == y) %>%
+#'         .$unique_cs_idx
+#'       
+#'       grpB_idx2 <- cs_tib %>%
+#'         filter(!(grp_names %in% y)) %>%
+#'         .$unique_cs_idx
+#'       
+#'       bkg <- M[grpA_idx2, grpB_idx2]
+#'       
+#'       if (use_bootstrap) {
+#'         res <- ks.boot(test, bkg, nboots = 1000, alternative = "two.sided")
+#'         connectivity <- res$ks$statistic
+#'         p.val <- res$ks.boot.pvalue
+#'         
+#'       } else {
+#'         res <- ks.test(test, bkg, alternative = "two.sided")
+#'         connectivity <- res$statistic
+#'         p.val <- res$p.val
+#'       }
+#'       
+#'       if (median(test, na.rm = T) < median(bkg, na.rm = T)) connectivity <- -1 * connectivity
+#'       
+#'       cat(".")
+#'       return(tibble(conn = connectivity, p_val = p.val))
+#'       
+#'       
+#'     })) %>%
+#'     bind_rows()
+#' }
+#' 
+# stop("debug here")

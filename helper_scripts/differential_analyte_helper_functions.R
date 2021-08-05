@@ -11,7 +11,7 @@ run_differential_analyte_analysis <- function(conn_clust_obj, bh_thresh = 0.1, d
                                               base_output_dir_specific = "~/Downloads", master_key = NULL){
   # DEBUG: 
   # read in final rds and debug
-  # conn_clust_obj <- p100_only_staurosporine_pert %>% select(-which_dat, cut_trees, co_clust, diff_ex); 
+  # conn_clust_obj <- p100_only_staurosporine_pert %>% dplyr::select(-which_dat, cut_trees, co_clust, diff_ex); 
   # group_var <- "pert_iname"
   # dataset <- "p100"
   # bh_thresh <- 0.1
@@ -146,21 +146,21 @@ calc_differential_analytes <- function(clust_assignments, dat, dname, co_clust, 
   features_names <- ordered_column_names_df$col_name[features_idx]; tail(features_names)
 
   clusts_int_vec <- dat_ %>% 
-    select(base_clust_comp) %>% # grab the correct cluster column
+    dplyr::select(base_clust_comp) %>% # grab the correct cluster column
     pluck(1) %>% # convert this 1-d dataframe into a vector
     unique() %>% # unique it and sort it
     sort(); clusts_int_vec
   
   # order the df with annots in front and data in back
-  ordered_dat_ <- select(dat_, all_of(ordered_column_names_df$col_name)); ordered_dat_
+  ordered_dat_ <- dplyr::select(dat_, all_of(ordered_column_names_df$col_name)); ordered_dat_
   # get a 'matrix' for diffe 
-  matrix_for_diffe <- select(ordered_dat_, base_clust_comp, all_of(features_names)); matrix_for_diffe
+  matrix_for_diffe <- dplyr::select(ordered_dat_, base_clust_comp, all_of(features_names)); matrix_for_diffe
   # 1:num clusters
   
   # get a unique df to look up cluster names and integer assignments 
   # that incoudes both base_clust_comp and cvnc_cluster names and integer cluster assignments
   unique_clust_labels_df <- ca_df %>% 
-    select(-cell_id) %>% 
+    dplyr::select(-cell_id) %>% 
     distinct()
   
   # stop()
@@ -171,7 +171,7 @@ calc_differential_analytes <- function(clust_assignments, dat, dname, co_clust, 
     # ith_cluster <- clusts_int_vec[3]
     
     base_clust_comp_name <- unique_clust_labels_df %>% 
-      select(base_clust_comp, base_clust_comp_name) %>% # take the correct cluster naming convention column
+      dplyr::select(base_clust_comp, base_clust_comp_name) %>% # take the correct cluster naming convention column
       filter(base_clust_comp == ith_cluster) %>% # take the correct name according to the cluster integer
       distinct(base_clust_comp_name) %>% # non-vascular clusters need to get lumped together, we just want the unique cluster assign
       pluck(1) # make it a character vector 
@@ -242,7 +242,7 @@ calc_differential_analytes <- function(clust_assignments, dat, dname, co_clust, 
         filter(base_clust_comp == i) %>% 
         mutate(id = str_c(base_clust_comp_name, pert_iname, sep = "-"),
                plot_clust_id = 1) %>%
-        select(plot_clust_id, id, all_of(k)) %>%
+        dplyr::select(plot_clust_id, id, all_of(k)) %>%
         rename(value := !!sym(k)); c1_names_df
       
       # c1_ecdf <- ecdf(c1_names_df$value)
@@ -251,7 +251,7 @@ calc_differential_analytes <- function(clust_assignments, dat, dname, co_clust, 
         filter(base_clust_comp != i) %>% 
         mutate(id = str_c(base_clust_comp_name, pert_iname, sep = "-"),
                plot_clust_id = 2) %>%
-        select(plot_clust_id, id, all_of(k)) %>%
+        dplyr::select(plot_clust_id, id, all_of(k)) %>%
         rename(value := !!sym(k)); c2_names_df
       # c2_ecdf <- ecdf(c2_names_df$value)
       
@@ -309,7 +309,7 @@ calc_differential_analytes <- function(clust_assignments, dat, dname, co_clust, 
     distinct(pr_gene_symbol, phosphosite) 
   diffe_by_clust_w_phos_df <- diffe_by_clust_df %>% 
     left_join(phospho_master_df, by=c("analyte"="pr_gene_symbol")) %>%
-    select(analyte, phosphosite, everything()); diffe_by_clust_w_phos_df
+    dplyr::select(analyte, phosphosite, everything()); diffe_by_clust_w_phos_df
   
   # diffe_by_clust = diffe_by_clust_w_phos; which.dat = "p100"; gid = c("HUVEC", "HAoSMC"); cluster_assignments_df = ca_df; dname = dname; dendo_thresh = DENDRO_CUT_THRESH; bh_thresh = BH_THRESH_VAL
   
@@ -324,8 +324,8 @@ calc_differential_analytes <- function(clust_assignments, dat, dname, co_clust, 
                                              morpheus_fn = morpheus_fn, 
                                              start_col_idx = start_col_idx)
   
-  write_csv(morpheus_lst$raw_dat, path = raw_fn)
-  write_csv(morpheus_lst$annots, path = annot_fn)
+  write_csv(morpheus_lst$raw_dat, file = raw_fn)
+  write_csv(morpheus_lst$annots, file = annot_fn)
   
   
   return(diffe_by_clust_w_phos_df)
@@ -350,7 +350,7 @@ write_morpheus_diffex_file <- function(data, dname = dname, gid = c("HUVEC","HAo
   
   informative_labels_lst <- create_informative_labels() # this is from the dendrograms.R script
   il_df <- informative_labels_lst$informative_labels_df %>% 
-    select(lbs, grp) %>% 
+    dplyr::select(lbs, grp) %>% 
     mutate(grp = as.character(grp)) %>%
     rename(cell_id = lbs, group = grp)
   
@@ -359,7 +359,7 @@ write_morpheus_diffex_file <- function(data, dname = dname, gid = c("HUVEC","HAo
     left_join(il_df, by = "cell_id") %>%
     mutate(u_cell_id = make.unique(cell_id)) %>% # added one new column here
     ungroup() %>%
-    select(well, cell_id, u_cell_id, group, pert_iname, drug_class, 
+    dplyr::select(well, cell_id, u_cell_id, group, pert_iname, drug_class, 
            base_clust_comp, base_clust_comp_name,
            # cvnc_cluster, cvnc_cluster_name, 
            everything())
@@ -373,7 +373,7 @@ write_morpheus_diffex_file <- function(data, dname = dname, gid = c("HUVEC","HAo
   well_cell_info <- for_morpheus %>% distinct(well, u_cell_id); well_cell_info
   clust_info <- for_morpheus %>% distinct(u_cell_id, base_clust_comp, base_clust_comp_name); clust_info
   group_info <- for_morpheus %>% distinct(u_cell_id, group); group_info
-  pert_info <- for_morpheus %>% select(drug_class,pert_iname); pert_info
+  pert_info <- for_morpheus %>% dplyr::select(drug_class,pert_iname); pert_info
   
   cname_total <- nrow(for_morpheus) + 1
   wells_row <- tibble(well = c("well",  well_cell_info$well), cnames = 1:cname_total) %>%
@@ -395,7 +395,7 @@ write_morpheus_diffex_file <- function(data, dname = dname, gid = c("HUVEC","HAo
   annots <- bind_rows(wells_row, cells_row, clust_row, clust_name_row, group_row, gpert_row, ipert_row)
   
   to_bind_with_annots <- g_for_morpheus %>%
-    select(-cell_id, -well, -base_clust_comp, -base_clust_comp_name, -group, 
+    dplyr::select(-cell_id, -well, -base_clust_comp, -base_clust_comp_name, -group, 
            # -cvnc_cluster, -cvnc_cluster_name, 
            -pert_iname, -drug_class) %>%
     spread(u_cell_id,pex)
@@ -650,7 +650,7 @@ plotly_hline <- function(y = 0, name = "test line", color = "blue", dash = "dash
 #'       top_analytes <- bind_rows(top_analytes, max, min)
 #'     }
 #'     tbl <- top_analytes %>% 
-#'       select(`cluster` = name, analyte, logFC, `BH.p.val` = p_val_bh, status)
+#'       dplyr::select(`cluster` = name, analyte, logFC, `BH.p.val` = p_val_bh, status)
 #'     
 #'     # cat("\n\n\\pagebreak\n")
 #'     print(kable(tbl,

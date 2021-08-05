@@ -5,8 +5,15 @@ library(ggsci)
 library(ggpubr)
 library(cmapR)
 
+# clustering
+library(cluster)
+library(factoextra)
+library(dbscan)
+library(fpc)
+
 library(progressr)
 
+library(minerva) # non-linear correlation analysis with mutual information theory
 library(matrixStats)
 library(pvclust) # cluster stability, Lev's paper
 library(Matching)
@@ -23,7 +30,11 @@ library(BiocParallel)
 ## progress bar ##
 handlers(global = TRUE) # no need to wrap every call with_progress
 handlers("progress")
-handlers(handler_progress(complete = "#"))
+handlers(handler_progress(
+  format   = ":spin :current/:total (:message) [:bar] :percent in :elapsed ETA: :eta",
+  width    = 60,
+  complete = "+"
+))
 ## progress bar ##
 
 
@@ -35,7 +46,7 @@ if (winos == 1) {
   )
 } else {
   working_directory <- file.path(
-    "", "Users", "Nicholas",
+    "", "Users", "ncamarda",
     "OneDrive - Tufts", "phd", "ws", "proteomics"
   )
 }
@@ -79,3 +90,13 @@ gcp_base_output_dir <- file.path(output_directory, "gcp")
 dir.create(gcp_base_output_dir, recursive = T, showWarnings = F)
 avg_base_output_dir <- file.path(output_directory, "avg")
 dir.create(avg_base_output_dir, recursive = T, showWarnings = F)
+
+dir_tbl <- tribble(~dataset_type, ~output_dir,
+                   "P100", p100_base_output_dir,
+                   "GCP", gcp_base_output_dir,
+                   "AVG", avg_base_output_dir)
+
+
+p100_fn <- file.path("combined-datasets", "P100-All-Cell-Lines.gct")
+gcp_fn <- file.path("combined-datasets", "GCP All Cell Lines.gct")
+

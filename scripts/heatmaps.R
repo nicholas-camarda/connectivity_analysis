@@ -56,30 +56,13 @@ plot_heatmap <- function(data, analytes, title_var = "pert_iname", base_output_d
   # base_output_dir = "~/Downloads/test"
   
   dataset <- data$which_dat[[1]]; dataset
+  
+  output_dir <- 
+  heatmap_output_fn <- 
   # stop()
   
-  if ("pert_iname" %in% colnames(data) & "drug_class" %in% colnames(data)){
-    org <- "pert_iname"
-    name <- data$pert_iname[[1]]
-    output_dir <- file.path(base_output_dir, "heatmaps", name)
-    dir.create(output_dir, recursive = T, showWarnings = F)
-    heatmap_output_fn <- file.path(output_dir, qq("@{name}_@{dataset}_heat_diffe.eps"))
-  } else if (!("pert_iname" %in% colnames(data)) & "drug_class" %in% colnames(data)){
-    org <- "moa"
-    name <- data$drug_class[[1]]
-    output_dir <- file.path(base_output_dir, "heatmaps", name)
-    dir.create(output_dir, recursive = T, showWarnings = F)
-    heatmap_output_fn <- file.path(output_dir, qq("@{name}_@{dataset}_heat_diffe.eps"))
-  } else { 
-    org <- "all"; name <- org
-    output_dir <- file.path(base_output_dir, "heatmaps", name)
-    dir.create(output_dir, recursive = T, showWarnings = F)
-    heatmap_output_fn <- file.path(output_dir, qq("@{name}_@{dataset}_heat_diffe.eps"))
-  }
-  message(qq("Writing to: \n@{heatmap_output_fn}"))
-  
   # load transposed matrix for condition
-  t_mat <- data$t_dataframe[[1]]
+  t_mat <- data$t_dataframe
   
   # get the corresponding matching annotations for columns of this matrix, including perturbations and moa character vectors
   match_df <- data$match_corr_lst[[1]]$col_match
@@ -110,7 +93,7 @@ plot_heatmap <- function(data, analytes, title_var = "pert_iname", base_output_d
   # il_df_temp <- informative_labels_lst$informative_labels_df %>%
   #   mutate(grp2 = ifelse(grp != "Vascular cells", "Non-vascular cells", as.character(grp)))
   # il_df <- il_df_temp %>%
-  #   select(lbs, grp2) %>%
+  #   dplyr::select(lbs, grp2) %>%
   #   rename(cell_id = lbs, group = grp2); il_df
   
   # generate the row annotations
@@ -356,14 +339,14 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   base_cell <- tail(column_order_df, n = 1)$grp_fac
   
   if (length(grp_names) == 3){
-    grp_colors <- bind_rows(ildf %>% select(grp_l2, color) %>% filter(grp_l2 %in% c("HAoSMC", "HUVEC")), 
-                            ildf %>% select(grp_l2, vasc_grp_color) %>% filter(!(grp_l2 %in% c("HAoSMC", "HUVEC"))) %>% rename(color = vasc_grp_color)) %>%
+    grp_colors <- bind_rows(ildf %>% dplyr::select(grp_l2, color) %>% filter(grp_l2 %in% c("HAoSMC", "HUVEC")), 
+                            ildf %>% dplyr::select(grp_l2, vasc_grp_color) %>% filter(!(grp_l2 %in% c("HAoSMC", "HUVEC"))) %>% rename(color = vasc_grp_color)) %>%
       distinct() %>%
       mutate(grp_fac = factor(grp_l2, levels = levels(base_cell))) %>%
       arrange(grp_fac); grp_colors
   } else if (length(grp_names) == 2 & "Vascular" %in% grp_names){
     grp_colors <- ildf %>% 
-      select(grp_l, vasc_grp_color) %>%
+      dplyr::select(grp_l, vasc_grp_color) %>%
       rename(grp_l2 = grp_l, color = vasc_grp_color) %>%
       distinct() %>%
       mutate(grp_fac = factor(grp_l2, levels = levels(base_cell))) %>%
@@ -371,7 +354,7 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   } else {
     # clustered together but with other cells - factors won't match
     grp_colors <- ildf %>% 
-      select(grp_l, vasc_grp_color) %>%
+      dplyr::select(grp_l, vasc_grp_color) %>%
       rename(grp_l2 = grp_l, color = vasc_grp_color) %>%
       distinct() %>%
       mutate(grp_fac = factor(grp_l2)) %>%
@@ -383,7 +366,7 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   #' [1] resolve huvec or haosmc in "all other" -> then the rest becomes non-vascular
   
   grp_color_df <- column_order_df %>% 
-    select(group) %>%
+    dplyr::select(group) %>%
     rename(grp_l2 = group) %>%
     left_join(grp_colors, by = "grp_l2") %>%
     mutate(color = ifelse(is.na(color), "#b6b6b6", color)) # grayish color for NA
