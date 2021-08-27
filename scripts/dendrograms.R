@@ -61,7 +61,7 @@ plot_pretty_dendrogram <- function(args,
                                    rotate_dendrogram = FALSE) {
   # args <- my_clust_obj[2,]
   
-  data <- args$cluster_lst
+  data <- args$clust_lst
   
   base_output_dir <- force_natural(args$path)
   

@@ -4,6 +4,8 @@ library(readxl)
 library(ggsci)
 library(ggpubr)
 library(cmapR)
+library(RColorBrewer)
+library(circlize)
 
 # clustering
 library(cluster)
@@ -96,7 +98,8 @@ dir_tbl <- tribble(~dataset_type, ~output_dir,
                    "GCP", gcp_base_output_dir,
                    "AVG", avg_base_output_dir)
 
+vascular_char_vec <- c("HUVEC", "HAoSMC")
 
-p100_fn <- file.path("combined-datasets", "P100-All-Cell-Lines.gct")
-gcp_fn <- file.path("combined-datasets", "GCP All Cell Lines.gct")
+# p100_fn <- file.path("combined-datasets", "P100-All-Cell-Lines.gct")
+# gcp_fn <- file.path("combined-datasets", "GCP All Cell Lines.gct")
 

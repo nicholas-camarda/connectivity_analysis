@@ -234,7 +234,7 @@ run_clust <- function(mat, use_parallel = FALSE) {
   mat <- force_natural(mat)
   
   # stop("debug")
-  print(Heatmap(mat))
+  # print(Heatmap(mat))
   
   pv_obj <- compute_boot_pvclust(
     x = mat,
@@ -486,7 +486,7 @@ run_diffe <- function(dat, cob, dname) {
         rename(value := !!sym(k)); c2_names_df
       
       # compute signal to noise
-      mean_grp_diff <- mean(c2, na.rm = T) - mean(c1, na.rm = T)
+      mean_grp_diff <- mean(c1, na.rm = T) - mean(c2, na.rm = T)
       sum_grp_sd <- sd(c2, na.rm = T) + sd(c1, na.rm = T)
       signal_to_nose <- mean_grp_diff / sum_grp_sd
       
@@ -504,6 +504,7 @@ run_diffe <- function(dat, cob, dname) {
         mutate(k_clust_dat = list(c1), 
                all_others_dat = list(c2))
       
+      # if (k == "CLTA" & base_clust_comp_name == "A375,HUVEC,PC3") stop("debug")
       # na_omit_res <- res %>% na.omit()
       p2()
       # cat(".")

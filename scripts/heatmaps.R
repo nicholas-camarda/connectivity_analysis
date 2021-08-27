@@ -27,7 +27,6 @@
 
 generate_color_palette <- function(){
   #' @note this is from master-source.R
-  all_drugs_mapping <- full_join(lst_dat$gcp$drug_mapping, lst_dat$p100$drug_mapping, by=c("pert_iname", "drug_class"))
   colors_ <- pal_igv("default")(51)[(1:nrow(all_drugs_mapping))+5]; length(colors_)
   all_drugs_mapping_final <- all_drugs_mapping %>% bind_cols(colors = colors_)
   return(all_drugs_mapping_final)
@@ -42,66 +41,67 @@ generate_color_palette <- function(){
 #' @param analytes character vector of analytes from original data
 #' @param title_var column name of analysis you'd wish to run (e.g. pert_iname, drug_class, or all)
 #' @param base_output_dir specific to dataset, e.g. ~/Downloads/p100 
-plot_heatmap <- function(data, analytes, title_var = "pert_iname", base_output_dir = "~/Downloads"){
+plot_heatmap <- function(args){
   
   #' colors: 
   #' https://www.colorhexa.com/
-  
-  vascular_char_vec <- c("HUVEC", "HAoSMC")
-  print(data)
-  # DEBUG:
-  # data = p100_ki_res_obj
-  # analytes = p100_ki_lst_obj$feature_set
-  # title_var = "drug_class"
-  # base_output_dir = "~/Downloads/test"
-  
-  dataset <- data$which_dat[[1]]; dataset
-  
-  output_dir <- 
-  heatmap_output_fn <- 
   # stop()
+  dataset <- force_natural(args$which_dat)
+  grouping_var <- force_natural(args$grouping_var)
+  output_dir_temp <- force_natural(args$path)
+  spec_char <- args %>% pluck(1)
+  output_dir <- file.path(output_dir_temp, spec_char)
+  dir.create(output_dir, recursive = T, showWarnings = F)
+  
+  heatmap_output_fn <- file.path(output_dir, str_c(spec_char, ".eps"))
+  # stop()
+  # dat_tbl <- force_natural(args$input_data); unique_clust_assignments <- force_natural(args$cluster_lst) %>% pluck(2); diff_ex_df <- force_natural(args$diffe_lst) %>% pluck(1)
   
   # load transposed matrix for condition
-  t_mat <- data$t_dataframe
+  dat_tbl <- args$input_data
   
-  # get the corresponding matching annotations for columns of this matrix, including perturbations and moa character vectors
-  match_df <- data$match_corr_lst[[1]]$col_match
+  w_annot_tbl <- dat_tbl %>% 
+    ungroup() %>% 
+    dplyr::select(replicate_id, pert_iname, pert_class, master_id, pr_gene_symbol, value) %>%
+    pivot_wider(names_from = pr_gene_symbol, 
+                values_from = value, 
+                values_fn = median) %>%
+    ungroup()
 
-  # replace the well annotations with unique cell id
-  mat_lst <- replace_rc_names(cur_mat = t_mat, rc = "c", match_df = match_df, new_match_id = "cell_id")
+  rnames <- w_annot_tbl$replicate_id
+  analytes <- unique(dat_tbl$pr_gene_symbol)
   
-  # new matrix with correct row and column annotations
-  mat <- mat_lst$new_mat
+  tbl <- w_annot_tbl %>% dplyr::select(replicate_id, all_of(analytes))
+  t_mat <- tbl %>% dplyr::select(-replicate_id) %>% as.data.frame()
+  rownames(t_mat) <- rnames
+  mat <- t_mat %>% t() %>%as.data.frame()
+  
   
   # get clust assignments and create dataframe of column annotations
-  unique_clust_assignments <- data$cut_trees[[1]]
+  unique_clust_assignments <- args$clust_lst %>% pluck(2)
   clusters_by_cell_id_df <- tibble::enframe(x = unique_clust_assignments, name = "cell_id", value = "cluster")
   column_annots_df_temp <- sapply(colnames(mat),  
-                             function(x) str_split(x, "\\.",simplify = T)[,1]) %>%
-    tibble::enframe(name = "u_cell_id",value = "cell_id") %>% 
-    left_join(clusters_by_cell_id_df, by="cell_id") %>% 
-    mutate(pert_iname = mat_lst$col_match$pert_iname,
-           drug_class = mat_lst$col_match$drug_class)
+                             function(x) str_split(x, "--",simplify = T)[,1]) %>%
+    tibble::enframe(name = "u_cell_id", value = "cell_id") %>% 
+    left_join(clusters_by_cell_id_df, by="cell_id") %>%
+    mutate(pert_iname = w_annot_tbl$pert_iname,
+           pert_class = w_annot_tbl$pert_class)
   
   
   # get diff_ex df
-  diff_ex_df <- data$diff_ex[[1]]
-  
-  
-  # group up the clusters
-  # informative_labels_lst <- create_informative_labels()
-  # il_df_temp <- informative_labels_lst$informative_labels_df %>%
-  #   mutate(grp2 = ifelse(grp != "Vascular cells", "Non-vascular cells", as.character(grp)))
-  # il_df <- il_df_temp %>%
-  #   dplyr::select(lbs, grp2) %>%
-  #   rename(cell_id = lbs, group = grp2); il_df
-  
+  if (class(args$diffe_lst) == "list") {
+    diff_ex_df <- args$diffe_lst %>% pluck(1)
+  } else { 
+    diff_ex_df <- args$diffe_lst
+  }
+
   # generate the row annotations
   row_annots_df_include_nonsig_all <- diff_ex_df %>% 
-    mutate(`-log10(q)` = ifelse(signif & !is.na(p_val_bh), -log(p_val_bh, base = 10), NA)) %>%
-    mutate(d_stat_val = ifelse(directional_stat == "--", -1*ks_statistic, ks_statistic)) 
+    mutate(`-log10(q)` = -log(p_val_boot_bh, base = 10)) %>%
+    # only handles the boot statistic -- make it handle the regular stat
+    mutate(d_stat_val = ifelse(directional_stat == "--" & !is.na(ks_boot_statistic), -1*ks_boot_statistic, ks_boot_statistic)) 
   
-  
+  # row_order_df <- 
   #'@NOTE: *TO-DO* need to be able to plot multiple heatmaps if 
   #' vasc cells don't cluster together
   # Get co-clust
@@ -112,12 +112,12 @@ plot_heatmap <- function(data, analytes, title_var = "pert_iname", base_output_d
   # clustered together and alone
   # clustered separately with no others
   # clustered separately with others
-  
+
   vasc_clust_id_df <- filter(clusters_by_cell_id_df, cell_id %in% vascular_char_vec); vasc_clust_id_df
   
   vasc_cluster_assignments_int <- unique(vasc_clust_id_df %>% .$cluster) # will be a doublet if they are in different clusters
   others_clustered_df <- filter(clusters_by_cell_id_df, 
-                                cluster %in% vasc_cluster_assignments_int); others_clustered_df
+                                (cluster %in% vasc_cluster_assignments_int)); others_clustered_df
   
   huvec_cluster <- filter(vasc_clust_id_df, cell_id == "HUVEC")$cluster
   haosmc_cluster <- filter(vasc_clust_id_df, cell_id == "HAoSMC")$cluster
@@ -133,7 +133,7 @@ plot_heatmap <- function(data, analytes, title_var = "pert_iname", base_output_d
     clustered_with_others <- F
   }
   
-  
+  # stop()
   co_clust; clustered_with_others; vasc_clust_id_df; clusters_by_cell_id_df
   # stop()
   if (!co_clust & (clustered_with_others | !clustered_with_others)) {
@@ -149,38 +149,44 @@ plot_heatmap <- function(data, analytes, title_var = "pert_iname", base_output_d
     bccn1_char_vec <- str_extract(string = unique(row_annots_df1$base_clust_comp_name), pattern = "HUVEC")
     bccn2_char_vec <- str_extract(string = unique(row_annots_df2$base_clust_comp_name), pattern = "HAoSMC")
     
-    cell_id_huvec_clust_char_vec <- as.character(unique(str_split(bccn1_char_vec, ",", simplify = T))); cell_id_huvec_clust_char_vec
-    cell_id_haosmc_clust_char_vec <- as.character(unique(str_split(bccn2_char_vec, ",", simplify = T))); cell_id_haosmc_clust_char_vec
+    cell_id_huvec_clust_char_vec <- as.character(unique(str_split(unique(row_annots_df1$base_clust_comp_name), ",", simplify = T))); cell_id_huvec_clust_char_vec
+    cell_id_haosmc_clust_char_vec <- as.character(unique(str_split(unique(row_annots_df2$base_clust_comp_name), ",", simplify = T))); cell_id_haosmc_clust_char_vec
     
     column_annots_df1 <- column_annots_df_temp %>%
       mutate(group = ifelse(cell_id %in% vascular_char_vec, cell_id, "Non-vascular"), 
-             cluster_name = ifelse(cell_id %in% cell_id_huvec_clust_char_vec, bccn1_char_vec, bccn2_char_vec),
+             cluster_name = ifelse(cell_id %in% cell_id_huvec_clust_char_vec, bccn1_char_vec, 
+                                   ifelse(cell_id %in% bccn2_char_vec, bccn2_char_vec, "Non-vascular")),
              which_dat = dataset, 
-             grp_fac = factor(group, levels = c("Non-vascular", bccn2_char_vec, bccn1_char_vec))); column_annots_df1
+             grp_fac = factor(cluster_name, 
+                              levels = c("Non-vascular", bccn2_char_vec, bccn1_char_vec))); column_annots_df1
     
-    filtered_test_mat1 <- mat[rownames(mat) %in% row_annots_df1$analyte,, drop=F ]
+    filtered_test_mat1 <- mat[rownames(mat) %in% row_annots_df1$analyte, 
+                              colnames(mat) %in% column_annots_df1$u_cell_id, 
+                              drop=F ]
     
    
     
     column_annots_df2 <- column_annots_df_temp %>%
       mutate(group = ifelse(cell_id %in% vascular_char_vec, cell_id, "Non-vascular"), 
-             cluster_name = ifelse(cell_id %in% cell_id_haosmc_clust_char_vec, bccn2_char_vec, bccn1_char_vec),
+             cluster_name = ifelse(cell_id %in% cell_id_huvec_clust_char_vec, bccn1_char_vec, 
+                                   ifelse(cell_id %in% bccn2_char_vec, bccn2_char_vec, "Non-vascular")),
              which_dat = dataset, 
-             grp_fac = factor(group, levels = c("Non-vascular", bccn1_char_vec, bccn2_char_vec))); column_annots_df2
+             grp_fac = factor(cluster_name, levels = c("Non-vascular", bccn1_char_vec, bccn2_char_vec))); column_annots_df2
     
-    filtered_test_mat2 <- mat[rownames(mat) %in% row_annots_df2$analyte,, drop=F ]
+    filtered_test_mat2 <- mat[rownames(mat) %in% row_annots_df2$analyte, colnames(mat) %in% column_annots_df2$u_cell_id, drop=F ] 
     
     split_fn <- str_split(heatmap_output_fn, "\\.", simplify = T)
     heatmap_output_fn1 <- str_c(split_fn[,1], qq("-@{bccn1_char_vec}."), split_fn[,2], collapse = "")
     heatmap_output_fn2 <- str_c(split_fn[,1], qq("-@{bccn2_char_vec}."), split_fn[,2], collapse = "")
     
+# stop()
     ht1_lst <- organize_and_plot_heatmap_subfunction(filtered_test_mat = filtered_test_mat1, 
                                                      row_annots_df = row_annots_df1, column_annots_df = column_annots_df1,
-                                                     heatmap_output_fn = heatmap_output_fn1, title_var = title_var)
+                                                     heatmap_output_fn = heatmap_output_fn1, title_var = grouping_var)
     
     ht2_lst <- organize_and_plot_heatmap_subfunction(filtered_test_mat = filtered_test_mat2, 
                                                      row_annots_df = row_annots_df2, column_annots_df = column_annots_df2,
-                                                     heatmap_output_fn = heatmap_output_fn2, title_var = title_var)
+                                                     heatmap_output_fn = heatmap_output_fn2, title_var = grouping_var)
     
     return(list("HUVEC" = list(bare_ht = ht1_lst$ht, complete_row_annot = row_annots_df_include_nonsig_all, 
                                filtered_row_annot = ht1_lst$row_order_df, col_annot = ht1_lst$column_order_df, 
@@ -199,8 +205,8 @@ plot_heatmap <- function(data, analytes, title_var = "pert_iname", base_output_d
     row_annots_df <- filter(row_annots_df_include_nonsig_all, 
                             str_detect(string = base_clust_comp_name, pattern = "HUVEC|HAoSMC"), signif); row_annots_df
     
-    
-    filtered_test_mat <- mat[rownames(mat) %in% row_annots_df$analyte,,drop=F ]
+    choose_analytes <- rownames(mat) %in% row_annots_df$analyte
+    filtered_test_mat <- mat[choose_analytes,,drop=F ] 
     
     clust_name_char <- unique(row_annots_df$base_clust_comp_name); clust_name_char
     clust_name_char_split_vec <- unlist(map(clust_name_char, function(c) str_split(c, ",", simplify = T))); clust_name_char_split_vec
@@ -208,14 +214,13 @@ plot_heatmap <- function(data, analytes, title_var = "pert_iname", base_output_d
     column_annots_df <- column_annots_df_temp %>%
       mutate(group = ifelse(cell_id %in% clust_name_char_split_vec, 
                             clust_name_char,"Non-vascular"),
+             cluster_name = group,
              which_dat = dataset) %>%
-      mutate(grp_fac = factor(group, levels = c("Non-vascular", clust_name_char))); column_annots_df
+      mutate(grp_fac = factor(cluster_name, levels = c("Non-vascular", clust_name_char))); column_annots_df
     
-    
-    # stop()
     ht_lst <- organize_and_plot_heatmap_subfunction(filtered_test_mat = filtered_test_mat, 
                                                     row_annots_df = row_annots_df, column_annots_df = column_annots_df,
-                                                    heatmap_output_fn = heatmap_output_fn, title_var = title_var)
+                                                    heatmap_output_fn = heatmap_output_fn, title_var = grouping_var)
     
     return("Combined_Vascular" = list(bare_ht = ht_lst$ht, complete_row_annot = row_annots_df_include_nonsig_all, 
                                       filtered_row_annot = ht_lst$row_order_df, col_annot = ht_lst$column_order_df, 
@@ -232,12 +237,13 @@ plot_heatmap <- function(data, analytes, title_var = "pert_iname", base_output_d
     column_annots_df <- column_annots_df_temp %>%
       mutate(group = ifelse(cell_id %in% c("HUVEC","HAoSMC"), 
                             "Vascular","Non-vascular"),
+             cluster_name = group,
              which_dat = dataset) %>%
-      mutate(grp_fac = factor(group, levels = c("Non-vascular", "Vascular"))); column_annots_df
+      mutate(grp_fac = factor(cluster_name, levels = c("Non-vascular", "Vascular"))); column_annots_df
     
     ht_lst <- organize_and_plot_heatmap_subfunction(filtered_test_mat = filtered_test_mat, 
                                                 row_annots_df = row_annots_df, column_annots_df = column_annots_df,
-                                                heatmap_output_fn = heatmap_output_fn, title_var = title_var)
+                                                heatmap_output_fn = heatmap_output_fn, title_var = grouping_var)
     
     return("Vascular" = list(bare_ht = ht_lst$ht, complete_row_annot = row_annots_df_include_nonsig_all, 
                              filtered_row_annot = ht_lst$row_order_df, col_annot = ht_lst$column_order_df, 
@@ -267,14 +273,8 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   
   # generate ordered df, and ordered column vector of analytes
   column_order_df <- column_annots_df %>% 
-    arrange(grp_fac, pert_iname, u_cell_id); column_order_df
-  
-  
-  # tail(column_order_df$u_cell_id, n = 20)
-  # tail(column_order_df$cluster, n = 20)
-  # tail(column_order_df$grp_fac, n = 20)
-  # tail(column_order_df$pert_iname, n = 20)
-  
+    arrange(grp_fac, cluster_name, pert_iname, u_cell_id); column_order_df
+
   # clusters in the order desired for clusters
   group_order <- levels(column_order_df$grp_fac);group_order
   n_max_clust <-  length(group_order); n_max_clust
@@ -284,8 +284,9 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   n_u_perts <- length(unique(perturbations_char_vec)); n_u_perts
   
   # get top up and down
-  top_up <- row_annots_df %>% filter(logFC > 0) %>% arrange(desc(`logFC`)); top_up
-  top_down <- row_annots_df %>% filter(logFC < 0) %>% arrange(desc(`logFC`)); top_down
+  # needs to be relative to 1
+  top_up <- row_annots_df %>% filter(logFC > 1) %>% arrange(desc(`logFC`)); top_up
+  top_down <- row_annots_df %>% filter(logFC < 1) %>% arrange(desc(`logFC`)); top_down
   row_order_df <- bind_rows(top_up,top_down) ; row_order_df
   
   stopifnot(nrow(row_order_df) == nrow(filtered_test_mat))
@@ -294,7 +295,7 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   signif_log_q_for_bar_plot <-  row_order_df$`-log10(q)`;
   # signif_log_q <- row_order_df %>% mutate(`-log10(q)` = round(-log(p_val_bh, base = 10),5) ) %>% .$`-log10(q)`
   signif_q_val <- round(row_order_df$p_val_bh,5)
-  extra_analyte_info <- row_order_df$phosphosite
+  extra_analyte_info <- row_order_df$mark
   d_statistics_vec <- round(row_order_df$d_stat_val, 3)
   fc_vec <- round(2^row_order_df$logFC, 3) # logFC is log_2
   analytes <- row_order_df$analyte
@@ -305,7 +306,8 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   # reorder the matrix first -- this could also be done in the heatmap function; 
   # however, be careful about the variable you use to assign column order and column attributes!
   # ESPECIALLY, column split
-  reordered_mat <- filtered_test_mat[row_order_df$analyte , column_order_df$u_cell_id, drop = F]
+  reordered_mat_temp <- filtered_test_mat[analytes, column_order_df$u_cell_id, drop = F] 
+  reordered_mat <- apply(reordered_mat_temp, 2, FUN = as.numeric)
   # tail(reordered_mat)
   ## PLOTTING
   FONTSIZE <- 7
@@ -439,6 +441,7 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   
   #' @To-Do: consider:
   # order the columns by their cluster identity, in addition to non-vascular vs vascular?
+  # stop()
   
   ht <- Heatmap(reordered_mat,
                 name = NAME, 
@@ -558,10 +561,9 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   
   # stop()
   message("Done!")
-  return(list(ht, row_order_df, column_order_df, reordered_mat) %>% set_names("ht","row_order_df", "column_order_df", "reordered_mat"))
+  return(list(ht, row_order_df, column_order_df, reordered_mat) %>% 
+           set_names("ht","row_order_df", "column_order_df", "reordered_mat"))
 }
-
-
 
 
 ############## HEATMAP FUNCTION ####################

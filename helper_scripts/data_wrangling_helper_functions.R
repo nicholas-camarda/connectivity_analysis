@@ -1,4 +1,38 @@
 
+#' @note plot missing values
+#' @param sub_obj sub_obj filtered 
+plot_missing <- function(sub_obj){
+  wide <- sub_obj %>%
+    dplyr::select(replicate_id, pert_iname, cell_id, pr_gene_symbol, value) %>%
+    pivot_wider(names_from =  pr_gene_symbol, id_cols = replicate_id:cell_id )
+  summary_ <- wide %>% 
+    group_by(replicate_id, pert_iname, cell_id) %>% 
+    miss_var_summary() %>%
+    summarize(mean_pct_pres = 100-mean(pct_miss)) %>%
+    # filter(mean_pct_pres >= 70) %>%
+    ungroup() %>%
+    arrange(mean_pct_pres) %>%
+    group_by(pert_iname, cell_id) %>%
+    mutate(n = 1:n()) %>% # number teh replicates
+    mutate(plot_id = str_c(cell_id, pert_iname,n, sep = "-")) %>%
+    ungroup(); summary_
+  
+  ggbarplot(summary_ %>% slice(1:50), x = "plot_id", y = "mean_pct_pres", ggtheme = theme_bw()) +
+    theme(axis.text.x = element_text(angle = 90, vjust = -0.0001))
+}
+
+
+find_duplicates <- function(tbl) {
+  #' only works on pivot_wider objects
+  apply(tbl[,-1], 2, function(x) {
+    if(any(which(x > 1))){
+      return(x)
+    }
+  })
+}
+
+
+
 #' @note use this in an apply call to merge all data
 #' @param l list of already-read-in GCT files
 #' @param dtype_ the dataset type of the GCT, e.g. P100 or GCP
@@ -115,7 +149,7 @@ create_ca_df <- function(ca) {
 #' conncetivity_output_dir, and clust_output_dir
 create_od_str <- function(filter_vars = c("Epigenetic", "Kinase Inhibitor"),
                           output_directory = "~/output",
-                          dataset_type  = "P100", grouping_var = "pert_class", dirs_to_make = c("corr", "conn", "clust")) {
+                          dataset_type  = "P100", grouping_var = "pert_class", dirs_to_make = c("corr", "conn", "clust", "diffe")) {
   message("Creating top output directory: ")
   specific_output_dir <- file.path(output_directory, dataset_type, grouping_var)
   dir.create(specific_output_dir, showWarnings = FALSE, recursive = TRUE)
