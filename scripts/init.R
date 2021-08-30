@@ -3,9 +3,14 @@ library(ggrepel)
 library(readxl)
 library(ggsci)
 library(ggpubr)
-library(cmapR)
+
 library(RColorBrewer)
+
+# bioconductor pacakges that need to be installed manually
+library(cmapR)
 library(circlize)
+library(ComplexHeatmap)
+library(BiocParallel)
 
 # clustering
 library(cluster)
@@ -24,10 +29,11 @@ library(dendextend)
 
 library(GetoptLong)
 library(gridExtra)
-library(ComplexHeatmap)
 
-library(BiocParallel)
 
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#   install.packages("BiocManager")
+# BiocManager::install(c("ComplexHeatmap", "BiocParallel", "cmapR", "circlize"))
 
 ## progress bar ##
 handlers(global = TRUE) # no need to wrap every call with_progress
@@ -40,15 +46,21 @@ handlers(handler_progress(
 ## progress bar ##
 
 
-winos <- ifelse(grepl("windows", Sys.info()["sysname"], ignore.case = T), 1, 0)
+winos <- ifelse(grepl("windows", Sys.info()["sysname"], ignore.case = T), 1, 
+                ifelse(grepl("linux", Sys.info()["sysname"], ignore.case = T), 2, 0))
 if (winos == 1) {
   working_directory <- file.path(
     "C:", "Users", "ncama",
     "OneDrive - Tufts", "phd", "ws"
   )
-} else {
+} else if (winos == 0) {
   working_directory <- file.path(
     "", "Users", "ncamarda",
+    "OneDrive - Tufts", "phd", "ws", "proteomics"
+  )
+} else {
+  working_directory <- file.path(
+    "", "home", "ncamarda93",
     "OneDrive - Tufts", "phd", "ws", "proteomics"
   )
 }
