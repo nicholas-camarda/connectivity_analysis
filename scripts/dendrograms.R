@@ -12,6 +12,7 @@ create_informative_labels <- function(){
   # colors <- brewer.pal(num_grps_cells, "Dark2") # cancer, not cancer / not vascular, vascular
   # colors <- c("#1eb6ff", "#ffd81e", "#000000", "#ff671e") # pal_igv("alternating")(2)
   colors <- c("#ff677f", "#ffe766", "#225ea8", "#41b6c4", "#9ba2ff", "#ffb781")
+  cell_colors <- c("#ffb781", "#9ba2ff", viridis::plasma(7))
   # names(colors) <- c("blue", "yellow", "black", "orange")
   # "#a1dab4", green
   names(colors) <- c("light red", "yellow", "dark blue", "light blue", "light purple", "orange")
@@ -39,11 +40,12 @@ create_informative_labels <- function(){
     mutate(color = ifelse(lbs == vascular_char_vec[1], colors[5], # check huvec
                           ifelse(lbs == vascular_char_vec[2], colors[6], # check haosmc
                                  ifelse(lbs %in% other_char_vec, colors[3], colors[4]))), # check other vs cancer
-           vasc_grp_color = ifelse(lbs %in% vascular_char_vec, colors[2], colors[1])) # check vasc vs non-vasc
+           vasc_grp_color = ifelse(lbs %in% vascular_char_vec, colors[2], colors[1])) %>%
+    mutate(cell_individual_color =cell_colors)
   
   grp_labels_ordered_for_legend_df <- informative_labels_df %>% 
     distinct(grp_l, vasc_grp_color) %>% 
-    arrange(desc(levels(grp_l)))
+    arrange(desc(levels(grp_l))) 
   
   res <- list(informative_labels_df, grp_labels_ordered_for_legend_df) %>% 
     set_names("informative_labels_df", "legend_dend_labels_df")

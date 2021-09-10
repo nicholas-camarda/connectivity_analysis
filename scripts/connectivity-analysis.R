@@ -269,6 +269,15 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   })
   
   
+  diffe_ggplot_outputpath <- res_paths_tbl %>% 
+    filter(match == "diffe_lst") %>% 
+    mutate(path = file.path(dirname(dirname(dirname(path))),"volcano_plots", str_c(basename(dirname(path)),"-volcano.pdf"))) %>%
+    mutate(directory = dirname(path))
+  
+  walk(diffe_ggplot_outputpath$directory, ~ dir.create(.x, recursive = T, showWarnings = F))
+  
+  ggplots_diffe <- purrr::transpose(res_obj$diffe_lst)$diffe_ggplot
+  walk2(as.list(ggplots_diffe), as.list(diffe_ggplot_outputpath$path), ~ ggsave(filename = .y, plot = .x))
   
   # stop("Debug")
   message("Done.")
