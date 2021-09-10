@@ -151,7 +151,7 @@ create_od_str <- function(filter_vars = c("Epigenetic", "Kinase Inhibitor"),
                           output_directory = "~/output",
                           dataset_type  = "P100", grouping_var = "pert_class", dirs_to_make = c("corr", "conn", "clust", "diffe")) {
   message("Creating top output directory: ")
-  specific_output_dir <- file.path(output_directory, dataset_type, grouping_var)
+  specific_output_dir <- file.path(output_directory, tolower(dataset_type), grouping_var)
   dir.create(specific_output_dir, showWarnings = FALSE, recursive = TRUE)
   message(qq("@{specific_output_dir}"))
   

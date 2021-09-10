@@ -11,7 +11,8 @@ analysis_fn <- file.path(data_directory, "test_args.csv")
 analysis_dat_temp <- read_csv(analysis_fn, comment = "#", 
                               show_col_types = FALSE) %>%
   mutate_all(str_trim) %>%
-  mutate(filter_vars = map(filter_vars, collect_args)) %>%
+  mutate(filter_vars = map(filter_vars, collect_args),
+         exclude = map(exclude, collect_args)) %>%
   left_join(dir_tbl, by = "dataset_type")
 
 # read in all 
@@ -85,13 +86,19 @@ analysis_dat <- inner_join(
   by = "dataset_type"
 )
 
+
 # analysis apply function
 analysis_res <- apply(analysis_dat, 1, function(args) {
-  # DEBUG: args = analysis_dat[1,]; 
+  # DEBUG: args = analysis_dat[3,]; 
   
   dataset_type <- args$dataset_type
   grouping_var <- args$grouping_var
   filter_vars <- force_natural(args$filter_vars)
+  if(any(is.na(force_natural(args$exclude)))){
+    exclude <- ""
+  } else { 
+    exclude <- force_natural(args$exclude)
+  }
   my_obj <- args$data
   
   # DEBUG:  my_obj <- force_natural(args$data)
@@ -113,29 +120,47 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     .$pert_iname
   my_perts <- intersect(HUVEC_HAoSMC_perts, other_perts)
   
-  sub_obj <- my_obj %>%
+  sub_obj_temp <- my_obj %>%
     # non-standard evaluation to find column for group 
     # and filter
     # filter for only perts that show in both cancer and vascular
     filter(pert_iname %in% my_perts) %>%
-    filter(!!sym(grouping_var) %in% filter_vars)
+    filter(!!sym(grouping_var) %in% filter_vars) %>%
+    # if we are excluding perts, make sure this runs
+    filter(!(pert_iname %in% exclude))
   
   #' print some summary information about filtered obj
-  print_helper_info(sub_obj, grouping_var)
+  print_helper_info(sub_obj_temp, grouping_var)
+  dir_name <- tibble(!!grouping_var := filter_vars) %>%
+    mutate(new_filter_var = map_chr(filter_vars, str_c, qq("_excl_@{exclude}"))) 
+  if (grouping_var == "pert_class"){
+    sub_obj <- suppressMessages(sub_obj_temp %>% 
+                                  left_join(dir_name) %>%
+                                  dplyr::select(-!!grouping_var) %>%
+                                  rename(!!grouping_var := new_filter_var))
+  } else {
+    sub_obj <- sub_obj_temp
+  }
+ 
   
   full_splt_lst <- split(sub_obj, f = sub_obj[[sym(grouping_var)]])
   stopifnot(length(full_splt_lst) == length(filter_vars))
   
-  output_dirs_lst <- create_od_str(filter_vars,
+  
+  output_dirs_lst <- create_od_str(dir_name$new_filter_var,
                                    output_directory,
                                    dataset_type, grouping_var
   )
   
+
+
+  
   # check output dir for results
   # stop()
+  directories_to_search <- file.path(output_directory, dataset_type, grouping_var, dir_name$new_filter_var)
   search_string <- "clust_clust_obj|conn_conn_tbl|corr_matrix|diffe_diffe_final_res"
   split_search_string <- str_split(string = search_string, pattern = "\\|", simplify = T)[1,]
-  output_paths <- tibble(path = dir(file.path(output_directory, dataset_type, grouping_var, filter_vars), 
+  output_paths <- tibble(path = dir(directories_to_search, 
                                     full.names = T,recursive = T)) %>%
     mutate(temp_col = str_extract(string = path, pattern = str_c(filter_vars, collapse = "|"))) %>%
     rename(!!grouping_var := temp_col) %>%
@@ -143,7 +168,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
                                       pattern = search_string)) %>%
     na.omit() 
   
-  output_path_check <- nrow(output_paths) == length(split_search_string)
+  output_path_check <- nrow(output_paths) == length(split_search_string); output_path_check
   
   # looking for 4 files
   if (!output_path_check) {
@@ -213,10 +238,11 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
                                          "prettydendros"), 
                         which_dat = dataset_type)
   
+
   dir.create(dendro_dirs$path %>% unique(), 
              recursive = T, showWarnings = F)
   my_dendro_obj <- suppressMessages(bind_cols(my_heatmap_and_dendro_obj_temp,
-                                              dendro_dirs))
+                                              dendro_dirs)) 
   
   apply(my_dendro_obj, 1, FUN = function(args_) {
     plot_pretty_dendrogram(args = args_, rotate_dendrogram = TRUE)
@@ -238,7 +264,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   
   
   apply(X = my_heatmap_obj, 1, FUN = function(args_) {
-    plot_heatmap_and_clustering(args = args_)
+    # plot_heatmap_and_clustering(args = args_)
     plot_heatmap(args = args_)
   })
   
