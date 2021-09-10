@@ -45,7 +45,7 @@ drugs_moa_df <- create_my_drugs_df(ref_dir = references_directory)
 
 # read in shared plated IDs from Srila's data
 # run debug-dataset.R first!
-shared_plate_id_df <- read_tsv("/Users/ncamarda/OneDrive - Tufts/phd/ws/proteomics/debug/shared_plate_ids.tsv", 
+shared_plate_id_df <- read_tsv(file.path(working_directory, "debug/shared_plate_ids.tsv"), 
                                show_col_types = FALSE) %>% 
   arrange(shared_plate_ids)
 shared_plate_ids <- shared_plate_id_df$shared_plate_ids
@@ -91,7 +91,7 @@ analysis_dat <- inner_join(
 analysis_res <- apply(analysis_dat, 1, function(args) {
   # DEBUG: args = analysis_dat[3,]; 
   
-  dataset_type <- args$dataset_type
+  dataset_type <- tolower(args$dataset_type)
   grouping_var <- args$grouping_var
   filter_vars <- force_natural(args$filter_vars)
   if(any(is.na(force_natural(args$exclude)))){
@@ -282,26 +282,37 @@ plot_heatmap_and_clustering <- function(args){
   # Debug
   stop()
   # args$input_data
+  gene_names <- unique(args$input_data$pr_gene_symbol)
   mat_temp <- args$input_data %>%
     dplyr::select(replicate_id, pert_iname, cell_id, pr_gene_symbol, value) %>%
     pivot_wider(replicate_id:cell_id, pr_gene_symbol)  %>%
     ungroup()
-  rnames <- mat_temp$replicate_id
-  mat <- t(apply(mat_temp %>% dplyr::select(-replicate_id, -pert_iname, -cell_id) %>% as.matrix(), 2, as.numeric))
+  
+  mat_no_replicates <- mat_temp %>% 
+    group_by(pert_iname, cell_id) %>% 
+    summarize(across(.cols = all_of(gene_names), ~ median(.x, na.rm = T)), .groups = "keep") %>%
+    ungroup()
+  
+  # rnames <- mat_temp$replicate_id
+  rnames <- mat_no_replicates$cell_id
+  
+  mat <- t(apply(mat_no_replicates %>%  # mat_temp
+                   dplyr::select(all_of(gene_names)) %>% 
+                   as.matrix(), 2, as.numeric))
   colnames(mat) <- rnames
   clustering_obj <- args$clust_lst$clust_obj$hclust
   
-  cluster_tb <- left_join(mat_temp,
+  cluster_tb <- left_join(mat_no_replicates, # mat_temp
                           tibble::enframe(args$clust_lst$cluster_assignments,
                                           name =  "cell_id", value = "base_clust_comp"), 
-                          by="cell_id") 
+                          by="cell_id") ; cluster_tb
   cluster_tb_name <- left_join(cluster_tb, 
                                args$diffe_lst %>% 
                                  force_natural() %>% 
                                  distinct(base_clust_comp_name, base_clust_comp),
                                by = "base_clust_comp") %>%
-    dplyr::select(replicate_id, cell_id, base_clust_comp, base_clust_comp_name)  %>%
-    arrange(base_clust_comp)
+    dplyr::select(cell_id, base_clust_comp, base_clust_comp_name)  %>% # replicate_id, 
+    arrange(base_clust_comp) ; cluster_tb_name
     
   
   cluster_tb_name_distinct <- cluster_tb_name %>%
@@ -318,8 +329,8 @@ plot_heatmap_and_clustering <- function(args){
   # analytes_order <- args$diffe_lst[[1]] %>% arrange(logFC)
   # set color breaks at quantiles
   breaks <- sapply(rev(c(.05, .10,.30,.50,.70,.90, .95)), function(q) quantile(mat, q, na.rm = T, names = F))
-  # col_fun = colorRamp2(breaks = breaks, colors = brewer.pal(n = length(breaks), name = "RdYlBu"))
-  col_fun <- colorRamp2(c(-1,0,1), colors =c("red", "white", "blue"))
+  col_fun = colorRamp2(breaks = breaks, colors = brewer.pal(n = length(breaks), name = "RdYlBu"))
+  # col_fun <- colorRamp2(c(-1,0,1), colors =c("red", "white", "blue"))
   # col_fun(seq(-3,3))
   library(yarrr)
   cols_annot1 <- piratepal(length.out = length(unique(cluster_tb$base_clust_comp_name)), trans = 0.1,  palette = "basel")
@@ -339,19 +350,16 @@ plot_heatmap_and_clustering <- function(args){
                 top_annotation = ha,
                 name = 'foo', 
                 cluster_rows = FALSE,
-                cluster_columns = FALSE,
+                cluster_columns = clustering_obj,
                 column_labels = cluster_tb_name$cell_id,
-                column_split = clusters,
+                column_split = max(clusters), # clusters
                 # cluster_columns = cluster_within_group(mat, factor = cluster_tb_name$base_clust_comp),
                 border = TRUE, # outline heatmap with black line
                 
                 # set general plot params
-                height = unit(6, "in"),
-                width = unit(10, "in"),
-                # height = unit(10, "mm")*nrow(reordered_mat),
-                # width = unit(4, "mm")*ncol(reordered_mat),
-                # height = unit(5, "mm")*nrow(reordered_mat),
-                # width = unit(5, "mm")*ncol(reordered_mat), # scale the shape of the heatmap
+                height = unit(10, "in"),
+                width = unit(6, "in"),
+
                 raster_device = "png",
                 row_names_gp =  gpar(fontsize = 6, fontface = "bold"),
                 heatmap_legend_param = list(direction = "horizontal"),
