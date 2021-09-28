@@ -526,20 +526,22 @@ run_diffe <- function(dat, cob, dname) {
     left_join(phosphosite_meta, by = "analyte") %>%
     dplyr::select(analyte, pr_gene_id, mark, everything()) %>%
     mutate(label_ = str_c("p",str_c(mark, analyte,sep =" ")), sep="") %>%
-    mutate(signif_and_fold = ifelse(signif & logFC > 0.5, T, ifelse(signif & logFC < -0.5, T, F))) %>% 
-    dplyr::select(signif_and_fold, signif, logFC, everything()) ; diffe_final_res
-  
-  # THIS DOESN"T WORK UGH ONLY GET EVERYTHING OUTSIDE OF 0.5!!!
+    mutate(signif_and_fold = ifelse(signif & logFC > LOGFC_CUTOFF, T, ifelse(signif & logFC < -LOGFC_CUTOFF, T, F))) %>% 
+    dplyr::select(signif_and_fold, signif, logFC, everything()) %>%
+    mutate(fc = 2^logFC); diffe_final_res
+
   signif_df <- diffe_final_res %>% filter(signif_and_fold); nrow(signif_df)
   # save this plot
+  
+  # stop()
   diffe_g <- ggplot(diffe_final_res %>% na.omit()) + 
-    geom_point(aes(x = logFC, y = -log10(p_val_boot_bh), color = directional_stat)) +
-    geom_vline(xintercept=c(-0.5, 0.5), col="purple", alpha = 0.5) +
+    geom_point(aes(x = fc, y = -log10(p_val_boot_bh), color = directional_stat), size = 2) +
+    geom_vline(xintercept=c(2^-LOGFC_CUTOFF, 2^LOGFC_CUTOFF), col="purple", alpha = 0.5) +
     geom_hline(yintercept=-log10(0.1), col="red", alpha = 0.5) +
     geom_label_repel(signif_df,
-                     mapping = aes(x = logFC, y = -log10(p_val_boot_bh), label = label_), force = 5,
+                     mapping = aes(x = fc, y = -log10(p_val_boot_bh), label = label_), force = 5,
                      min.segment.length = unit(0, 'lines')) +
-    scale_color_manual(values = RColorBrewer::brewer.pal(3, "Set1")) +
+    scale_color_manual(values = c("blue","red")) +
     theme_bw() +
     theme(plot.title = element_text(hjust = 0.5, size = 25, face = "bold"),
           plot.subtitle = element_text(hjust = 0.5, size = 15, face = "bold"),
@@ -549,12 +551,12 @@ run_diffe <- function(dat, cob, dname) {
     labs(color = "Directional change", 
          caption = "BH.q.val = Benjamini-Hochberg-Corrected P-value (q) \nCut-off for displaying label: q < 0.1 \nDifference between groups calculated using ks.test()") +
     ylab("-Log10(BH.q.val)") +
-    xlab("Log2(Fold Change)") + 
+    xlab("Fold change") + 
     ggtitle(label = qq("@{toupper(which_dat)}, @{dname}"))
   
   if (nrow(clust_label_df) > 1) {
     diffe_g <- diffe_g +
-      facet_grid(~base_clust_comp_name) 
+      facet_grid(~base_clust_comp_name, scales = "free_x") 
   }
   diffe_g
   # message("Done")

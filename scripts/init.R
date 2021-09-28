@@ -114,6 +114,7 @@ dir_tbl <- tribble(~dataset_type, ~output_dir,
                    "GCP", gcp_base_output_dir,
                    "AVG", avg_base_output_dir)
 
+LOGFC_CUTOFF <- 0.5
 vascular_char_vec <- c("HUVEC", "HAoSMC")
 
 # p100_fn <- file.path("combined-datasets", "P100-All-Cell-Lines.gct")

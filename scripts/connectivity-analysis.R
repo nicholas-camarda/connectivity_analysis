@@ -94,7 +94,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   dataset_type <- tolower(args$dataset_type)
   grouping_var <- args$grouping_var
   filter_vars <- force_natural(args$filter_vars)
-  if(any(is.na(force_natural(args$exclude)))){
+  if(any(is.na(force_natural(args$exclude)))) {
     exclude <- ""
   } else { 
     exclude <- force_natural(args$exclude)
@@ -135,19 +135,15 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   dir_name <- tibble(!!grouping_var := filter_vars) %>%
     mutate(new_filter_var = map_chr(filter_vars, str_c, qq("_excl_@{exclude}"))) 
   
-  if (grouping_var == "pert_class"){
-    sub_obj <- suppressMessages(sub_obj_temp %>% 
-                                  left_join(dir_name) %>%
-                                  dplyr::select(-!!grouping_var) %>%
-                                  rename(!!grouping_var := new_filter_var))
-  } else {
-    sub_obj <- sub_obj_temp
-  }
- 
+  sub_obj <- sub_obj_temp %>% 
+    left_join(dir_name) %>%
+    ungroup() %>% 
+    dplyr::select(-!!grouping_var) %>%
+    rename(!!grouping_var := new_filter_var) %>% 
+    suppressMessages()
   
   full_splt_lst <- split(sub_obj, f = sub_obj[[sym(grouping_var)]])
   stopifnot(length(full_splt_lst) == length(filter_vars))
-  
   
   output_dirs_lst <- create_od_str(filter_vars = dir_name$new_filter_var,
                                    output_directory = output_directory, 
@@ -159,7 +155,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   
   # check output dir for results
   # stop()
-  directories_to_search <- file.path(output_directory, dataset_type, grouping_var, dir_name$new_filter_var)
+  directories_to_search <- file.path(output_directory, dataset_type, "cache", grouping_var, unique(dir_name$new_filter_var))
   search_string <- "clust_clust_obj|conn_conn_tbl|corr_matrix|diffe_diffe_final_res"
   split_search_string <- str_split(string = search_string, pattern = "\\|", simplify = T)[1,]
   output_paths <- tibble(path = dir(directories_to_search, 
@@ -167,8 +163,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     mutate(temp_col = str_extract(string = path, pattern = str_c(filter_vars, collapse = "|"))) %>%
     rename(!!grouping_var := temp_col) %>%
     mutate(extract_path = str_extract(string = path,  
-                                      pattern = search_string)) %>%
-    na.omit() 
+                                      pattern = search_string)) 
   
   output_path_check <- nrow(output_paths) == length(split_search_string)*length(directories_to_search); output_path_check
   
@@ -192,12 +187,15 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
       mutate(name = names(res_obj$clust_lst)) %>% 
       pivot_longer(corr_lst:diffe_lst, 
                    names_to = "match", values_to = "lst") %>%
-      rename(!!grouping_var := name) 
+      rename(!!grouping_var := name) %>%
+      mutate(dirname_ = .[[1]],
+             !!grouping_var := str_split(string = dirname_, pattern = "_", simplify = TRUE )[,1])
     
     res_paths_tbl_temp <- left_join(
       output_dirs_lst,
       tbl_res_obj
     ) %>% suppressMessages()
+    
     stopifnot(nrow(res_paths_tbl_temp) == nrow(tbl_res_obj))
     
     # TODO: write ifelse to skip analysis if already cached
@@ -229,17 +227,18 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   }
   message("Done.")
   
-  my_heatmap_and_dendro_obj_temp <- suppressMessages(res_paths_tbl %>% 
+  my_heatmap_and_dendro_obj_temp <- res_paths_tbl %>% 
     pivot_wider(id_cols = !!grouping_var, names_from = match, values_from = lst) %>%
     arrange(grouping_var) %>%
     mutate(base_path = file.path(output_directory, dataset_type),
            which_dat = dataset_type) %>%
-    left_join(output_dirs_lst))
-
+    left_join(output_dirs_lst) %>%
+    suppressMessages()
+  
   # figure out how to get paths easily here
   # TODO FIX FIX FIX
   my_dendro_obj <- my_heatmap_and_dendro_obj_temp %>%
-    mutate(dir_path = file.path(base_path, "prettydendros"),
+    mutate(dir_path = file.path(base_path, "plots", "prettydendros"),
            path = file.path(dir_path, str_c(dirname_, ".eps"))) %>%
     distinct(path, .keep_all = TRUE) %>%
     dplyr::select(-match)
@@ -249,12 +248,14 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     plot_pretty_dendrogram(args = args_, rotate_dendrogram = TRUE)
   })
   
-  input_dat_wide <- tibble(input_data = full_splt_lst, 
-                           !!grouping_var := names(full_splt_lst)) 
+  input_dat_wide <- tibble(dirname_ = names(full_splt_lst), 
+                           input_data = full_splt_lst) %>%
+    mutate(dirname_ = .[[1]],
+           !!grouping_var := str_split(string = dirname_, pattern = "_", simplify = TRUE )[,1])
   
   my_heatmap_obj <- suppressMessages(left_join(my_heatmap_and_dendro_obj_temp,
                                                input_dat_wide)) %>%
-    mutate(dir_path = file.path(base_path, "heatmaps"),
+    mutate(dir_path = file.path(base_path,"plots",  "heatmaps"),
            path = file.path(dir_path, str_c(dirname_, ".eps"))) %>%
     distinct(path, .keep_all = TRUE)%>%
     dplyr::select(-match) %>%
@@ -267,12 +268,12 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   })
   
   diffe_ggplot_outputpath <- my_heatmap_and_dendro_obj_temp %>%
-    mutate(dir_path = file.path(base_path, "volcano_plots"),
+    mutate(dir_path = file.path(base_path, "plots", "volcano_plots"),
            path = file.path(dir_path, str_c(dirname_, ".eps"))) %>%
-    distinct(path, .keep_all = TRUE)%>%
+    distinct(path, .keep_all = TRUE) %>%
     dplyr::select(-match) %>%
     mutate(grouping_var = grouping_var)
-    
+  
   walk(diffe_ggplot_outputpath$dir_path, ~ dir.create(.x, recursive = T, showWarnings = F))
   
   ggplots_diffe <- purrr::transpose(diffe_ggplot_outputpath$diffe_lst)$diffe_ggplot
@@ -282,136 +283,3 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
 })
 
 
-plot_heatmap_and_clustering <- function(args){
-  
-  # Debug
-  # stop()
-  # args$input_data
-  gene_names <- unique(args$input_data$pr_gene_symbol)
-  mat_temp <- args$input_data %>%
-    dplyr::select(replicate_id, pert_iname, cell_id, pr_gene_symbol, value) %>%
-    pivot_wider(replicate_id:cell_id, pr_gene_symbol)  %>%
-    ungroup()
-  
-  mat_no_replicates <- mat_temp %>% 
-    group_by(pert_iname, cell_id) %>% 
-    summarize(across(.cols = all_of(gene_names), ~ median(.x, na.rm = T)), .groups = "keep") %>%
-    ungroup()
-  
-  # rnames <- mat_temp$replicate_id
-  rnames <- mat_no_replicates$cell_id
-  
-  mat <- t(apply(mat_no_replicates %>%  # mat_temp
-                   dplyr::select(all_of(gene_names)) %>% 
-                   as.matrix(), 2, as.numeric))
-  colnames(mat) <- rnames
-  clustering_obj <- args$clust_lst$clust_obj$hclust
-  
-  cluster_tb <- left_join(mat_no_replicates, # mat_temp
-                          tibble::enframe(args$clust_lst$cluster_assignments,
-                                          name =  "cell_id", value = "base_clust_comp"), 
-                          by="cell_id") ; cluster_tb
-  cluster_tb_name <- left_join(cluster_tb, 
-                               args$diffe_lst %>% 
-                                 force_natural() %>% 
-                                 distinct(base_clust_comp_name, base_clust_comp),
-                               by = "base_clust_comp") %>%
-    dplyr::select(cell_id, base_clust_comp, base_clust_comp_name)  %>% # replicate_id, 
-    arrange(base_clust_comp) ; cluster_tb_name
-    
-  
-  cluster_tb_name_distinct <- cluster_tb_name %>%
-    distinct(cell_id, base_clust_comp, base_clust_comp_name) 
-  
-  cluster_tb_name_vec <- cluster_tb_name %>% 
-    distinct(base_clust_comp, base_clust_comp_name) %>% 
-    .$base_clust_comp_name
-  
-  clusters <- cluster_tb_name %>% 
-    dplyr::select(base_clust_comp, base_clust_comp_name) %>%
-    .$base_clust_comp
-  
-  # analytes_order <- args$diffe_lst[[1]] %>% arrange(logFC)
-  # set color breaks at quantiles
-  breaks <- sapply(rev(c(.05, .10,.30,.50,.70,.90, .95)), function(q) quantile(mat, q, na.rm = T, names = F))
-  col_fun = colorRamp2(breaks = breaks, colors = brewer.pal(n = length(breaks), name = "RdYlBu"))
-  # col_fun <- colorRamp2(c(-1,0,1), colors =c("red", "white", "blue"))
-  # col_fun(seq(-3,3))
-  library(yarrr)
-  cols_annot1 <- piratepal(length.out = length(unique(cluster_tb$base_clust_comp_name)), trans = 0.1,  palette = "basel")
-  cols_annot2 <- left_join(cluster_tb_name, tibble(color = piratepal(length.out = length(unique(cluster_tb$cell_id)), trans = 0.1,  palette = "basel")) %>%
-    bind_cols(cluster_tb_name_distinct) %>%
-      mutate(n = 1:n())) 
-  
-  #' sort by cell name and then by cluster
-  names(cols_annot2$color) <- cols_annot2$n
-  
-  # cols_annot2_final <- 
-  # fh = function(x) fastcluster::hclust(dist(x))
-  ha <- HeatmapAnnotation(`cell id` = anno_simple(x = cols_annot2$n, col = cols_annot2$color))
-  ht <- Heatmap(mat,
-                na_col = "gray",
-                col = col_fun,
-                top_annotation = ha,
-                name = 'foo', 
-                cluster_rows = FALSE,
-                cluster_columns = clustering_obj,
-                column_labels = cluster_tb_name$cell_id,
-                column_split = max(clusters), # clusters
-                # cluster_columns = cluster_within_group(mat, factor = cluster_tb_name$base_clust_comp),
-                border = TRUE, # outline heatmap with black line
-                
-                # set general plot params
-                height = unit(10, "in"),
-                width = unit(6, "in"),
-
-                raster_device = "png",
-                row_names_gp =  gpar(fontsize = 6, fontface = "bold"),
-                heatmap_legend_param = list(direction = "horizontal"),
-                rect_gp = gpar(col = "white", lwd = 0.7)); draw(ht)
-                # # row_title = "Analyte",
-                # row_title_side = "right",
-                # row_title_rot = 0, 
-                # show_row_names = TRUE,
-                # cluster_rows = FALSE,
-                # # cluster_columns = fh, 
-                # # cluster_columns = TRUE,
-                # column_names_rot = 90,
-                # show_column_names = FALSE, 
-                # cluster_columns = FALSE,
-                # # column_labels = unique(cluster_tb_name_distinct$base_clust_comp_name),
-                # # column_title = cluster_tb_name_vec,
-                # # column_split = cluster_tb$base_clust_comp,
-                # # cluster_columns = clustering_obj,
-                # # column_sp
-                # # cluster_columns = clustering_obj,
-                # # column_split = cluster_tb$base_clust_comp, # split the columns by cluster! need an assignment per column
-                # 
-                # # column_title = " ", 
-                # # no column title, otherwise defaults to groups
-                # # column_title_gp = gpar(fill = c("white"), font = 3), # if split column title, then fill can take on mulitple vals
-                # # column_title = clusters$group,
-                # column_order = cluster_tb_name$replicate_id, # order the columns of this matrix with a new order, by u_cell_id (which matches matrix column names)
-                # # cluster_columns = as.dendrogram(clustering_obj),
-                # # column_dend_reorder = TRUE,
-                # 
-                # # column_title_gp = gpar(fontsize = 15, fontface = "bold"),
-                # # column_title = "Cell ID (unique)",
-                # # column_title_side = "bottom",
-                # 
-                # border = TRUE, # outline heatmap with black line
-                # 
-                # # set general plot params
-                # height = unit(6, "in"),
-                # width = unit(10, "in"),
-                # # height = unit(10, "mm")*nrow(reordered_mat),
-                # # width = unit(4, "mm")*ncol(reordered_mat),
-                # # height = unit(5, "mm")*nrow(reordered_mat),
-                # # width = unit(5, "mm")*ncol(reordered_mat), # scale the shape of the heatmap
-                # raster_device = "png",
-                # row_names_gp =  gpar(fontsize = 6, fontface = "bold"),
-                # heatmap_legend_param = list(direction = "horizontal"),
-                # rect_gp = gpar(col = "white", lwd = 0.7)); draw(ht)
-  
-  
-}

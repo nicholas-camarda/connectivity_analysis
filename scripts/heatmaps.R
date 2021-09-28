@@ -33,7 +33,6 @@ generate_color_palette <- function(){
 }
 
 
-
 ############## HEATMAP FUNCTION ####################
 ############## HEATMAP FUNCTION ####################
 
@@ -48,15 +47,9 @@ plot_heatmap <- function(args){
   # stop()
   dataset <- force_natural(args$which_dat)
   grouping_var <- force_natural(args$grouping_var)
-  output_dir_temp <- force_natural(args$path)
   spec_char <- args %>% pluck(1)
-  # output_dir <- file.path(output_dir_temp, spec_char)
-  # dir.create(output_dir, recursive = T, showWarnings = F)
-  
-  heatmap_output_fn <- force_natural(args$path)
-  # stop()
-  # dat_tbl <- force_natural(args$input_data); unique_clust_assignments <- force_natural(args$cluster_lst) %>% pluck(2); diff_ex_df <- force_natural(args$diffe_lst) %>% pluck(1)
-  
+  heatmap_output_fn <- args$path
+
   # load transposed matrix for condition
   dat_tbl <- args$input_data
   
@@ -279,7 +272,7 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   n_max_clust <-  length(group_order); n_max_clust
   
   # perturbations, in the column order
-  perturbations_char_vec_temp <- column_order_df$pert_iname; unique(perturbations_char_vec_temp)
+  perturbations_char_vec_temp <- str_split(string = column_order_df$pert_iname, pattern = "_", simplify = TRUE)[,1]
   
   extra_pert_info <- read_excel(file.path(references_directory, "Drug Glossary_edited.xlsx")) %>%
     mutate(pert_iname = tolower(Drug), moa_simple = `MOA simplified`) %>%
@@ -296,8 +289,9 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   
   # get top up and down
   # needs to be relative to 1
-  top_up <- row_annots_df %>% filter(logFC > 1) %>% arrange(desc(`logFC`)); top_up
-  top_down <- row_annots_df %>% filter(logFC < 1) %>% arrange(desc(`logFC`)); top_down
+  # LOGFC_CUTOFF is defined in init.R
+  top_up <- row_annots_df %>% filter(logFC > LOGFC_CUTOFF) %>% arrange(desc(`logFC`)); top_up
+  top_down <- row_annots_df %>% filter(logFC < LOGFC_CUTOFF) %>% arrange(desc(`logFC`)); top_down
   row_order_df <- bind_rows(top_up,top_down) ; row_order_df
   
   stopifnot(nrow(row_order_df) == nrow(filtered_test_mat))
@@ -308,6 +302,7 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   signif_q_val <- round(row_order_df$p_val_bh,5)
   extra_analyte_info <- row_order_df$mark
   d_statistics_vec <- round(row_order_df$d_stat_val, 3)
+  # fold change
   fc_vec <- round(2^row_order_df$logFC, 3) # logFC is log_2
   analytes <- row_order_df$analyte
   color_fc_row_labels <- tibble(fc_vec) %>% 
