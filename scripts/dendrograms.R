@@ -65,12 +65,12 @@ plot_pretty_dendrogram <- function(args,
   
   data <- args$clust_lst
   
-  base_output_dir <- force_natural(args$path)
+  # base_output_dir <- force_natural(args$path)
   
   dataset <- force_natural(args$which_dat)
   fn_name_s <- force_natural(args[1])
   plot_title <- qq("Hierarchical clustering on connectivity matrix\n@{fn_name_s} || @{dataset}")
-  dendro_output_fn <- file.path(base_output_dir, qq("@{fn_name_s}.eps"))
+  dendro_output_fn <- force_natural(args$path)
   
   cell_id_clusters_char_vec <- force_natural(data$cluster_assignments); # cell_id_clusters_char_vec
   pvclust_obj <- force_natural(data$clust_obj); # print(pvclust_obj)

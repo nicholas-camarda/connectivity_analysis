@@ -50,10 +50,10 @@ plot_heatmap <- function(args){
   grouping_var <- force_natural(args$grouping_var)
   output_dir_temp <- force_natural(args$path)
   spec_char <- args %>% pluck(1)
-  output_dir <- file.path(output_dir_temp, spec_char)
-  dir.create(output_dir, recursive = T, showWarnings = F)
+  # output_dir <- file.path(output_dir_temp, spec_char)
+  # dir.create(output_dir, recursive = T, showWarnings = F)
   
-  heatmap_output_fn <- file.path(output_dir, str_c(spec_char, ".eps"))
+  heatmap_output_fn <- force_natural(args$path)
   # stop()
   # dat_tbl <- force_natural(args$input_data); unique_clust_assignments <- force_natural(args$cluster_lst) %>% pluck(2); diff_ex_df <- force_natural(args$diffe_lst) %>% pluck(1)
   
@@ -271,13 +271,6 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
                                                   row_annots_df, column_annots_df,
                                                   heatmap_output_fn, title_var = "pert_iname"){
   
-  stop()
-  # library(seriation)
-  # generate ordered df, and ordered column vector of analytes
-  
-  # o1 = seriate(dist(filtered_test_mat), method = "TSP")
-  # o2 = seriate(dist(t(filtered_test_mat)), method = "TSP")
-  {
   column_order_df <- column_annots_df %>% 
     arrange(grp_fac, cluster_name, pert_iname, u_cell_id); column_order_df
   
@@ -286,8 +279,19 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   n_max_clust <-  length(group_order); n_max_clust
   
   # perturbations, in the column order
-  perturbations_char_vec <- column_order_df$pert_iname; unique(perturbations_char_vec)
-  extra_pert_info <- read_excel(references_directory, "Drug Glossary_edited.xlsx")
+  perturbations_char_vec_temp <- column_order_df$pert_iname; unique(perturbations_char_vec_temp)
+  
+  extra_pert_info <- read_excel(file.path(references_directory, "Drug Glossary_edited.xlsx")) %>%
+    mutate(pert_iname = tolower(Drug), moa_simple = `MOA simplified`) %>%
+    dplyr::select(pert_iname, moa_simple) %>%
+    mutate(moa_simple = ifelse(is.na(moa_simple), "", moa_simple))
+  
+  link_moa_to_pert <- tibble(pert_iname = perturbations_char_vec_temp) %>%
+    left_join(extra_pert_info, by = "pert_iname") %>%
+    rename(pert_iname_temp = pert_iname) %>%
+    mutate(pert_iname = str_c(pert_iname_temp, " (", moa_simple, ")", sep = ""))
+  
+  perturbations_char_vec <- link_moa_to_pert$pert_iname
   n_u_perts <- length(unique(perturbations_char_vec)); n_u_perts
   
   # get top up and down
@@ -387,10 +391,11 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   names(col_fun_annot1) <- grp_names_char_vec
   block_col_fun_annot1 <- unique(col_fun_annot1)
   
-  col_palette_2_df <- generate_color_palette()
-  col_fun_annot2 = col_palette_2_df %>% 
-    filter(pert_iname %in% perturbations_char_vec) %>% 
+  col_palette_2_df <- generate_color_palette() 
+  col_fun_annot2 <- col_palette_2_df %>% 
+    filter(pert_iname %in% unique(link_moa_to_pert$pert_iname_temp)) %>% 
     .$colors
+  
   names(col_fun_annot2) <- unique(perturbations_char_vec)
   
   cell_color_df <- column_order_df %>% 
@@ -467,10 +472,6 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   # stop()
   
   ht <- Heatmap(reordered_mat,
-                
-                # row_order = get_order(o1),
-                # column_order = get_order(o2),
-                
                 name = NAME, 
                 col = col_fun, 
                 na_col = "gray",
@@ -518,11 +519,10 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
                 # width = unit(5, "mm")*ncol(reordered_mat), # scale the shape of the heatmap
                 raster_device = "png",
                 heatmap_legend_param = list(direction = "horizontal"),
-                rect_gp = gpar(col = "white", lwd = 0.7)); ht
-  };draw(ht)
+                rect_gp = gpar(col = "white", lwd = 0.7));draw(ht)
   # legend for cell lines
   
-  lgd_list = list(Legend(labels = group_order, title = "Cell lines", legend_gp = gpar(fill = block_col_fun_annot1)))
+  lgd_list = list(Legend(labels = group_order, title = "Group", legend_gp = gpar(fill = block_col_fun_annot1)))
   
   size = calc_ht_size(ht)
   

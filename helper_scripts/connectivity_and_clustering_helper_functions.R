@@ -544,7 +544,7 @@ run_diffe <- function(dat, cob, dname) {
     theme(plot.title = element_text(hjust = 0.5, size = 25, face = "bold"),
           plot.subtitle = element_text(hjust = 0.5, size = 15, face = "bold"),
           axis.title = element_text(size = 15),
-          axis.text = element_text(size = 10)) +
+          axis.text = element_text(size = 10, angle = 45)) +
     guides(size = FALSE) + 
     labs(color = "Directional change", 
          caption = "BH.q.val = Benjamini-Hochberg-Corrected P-value (q) \nCut-off for displaying label: q < 0.1 \nDifference between groups calculated using ks.test()") +

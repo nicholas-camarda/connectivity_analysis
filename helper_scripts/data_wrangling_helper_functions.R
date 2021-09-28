@@ -149,7 +149,8 @@ create_ca_df <- function(ca) {
 #' conncetivity_output_dir, and clust_output_dir
 create_od_str <- function(filter_vars = c("Epigenetic", "Kinase Inhibitor"),
                           output_directory = "~/output",
-                          dataset_type  = "P100", grouping_var = "pert_class", dirs_to_make = c("corr", "conn", "clust", "diffe")) {
+                          dataset_type  = "P100", grouping_var = "pert_class", 
+                          dirs_to_make = c("corr", "conn", "clust", "diffe")) {
   message("Creating top output directory: ")
   specific_output_dir <- file.path(output_directory, tolower(dataset_type), grouping_var)
   dir.create(specific_output_dir, showWarnings = FALSE, recursive = TRUE)
@@ -218,11 +219,11 @@ create_my_drugs_df <- function(ref_dir = REFERENCES_DIRECTORY) {
   drug_classes_fn <- file.path(ref_dir, "Drug Glossary_edited.xlsx")
   cancer_drug_moa_df <- read_excel(path = drug_classes_fn, sheet = 1) %>%
     filter(!is.na(Drug)) %>%
-    transmute(pert_iname = Drug, pert_class = Class, pert_category = "cancer")
+    mutate(pert_iname = Drug, pert_class = Class, pert_category = "cancer")
   
   cv_drug_moa_df <- read_excel(path = drug_classes_fn, sheet = 2) %>%
     filter(!is.na(`Drug (Generic)`)) %>%
-    transmute(
+    mutate(
       pert_iname = `Drug (Generic)`,
       pert_class = `Class`, pert_category = "cv"
     )

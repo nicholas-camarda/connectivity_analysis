@@ -11,8 +11,7 @@ analysis_fn <- file.path(data_directory, "test_args.csv")
 analysis_dat_temp <- read_csv(analysis_fn, comment = "#", 
                               show_col_types = FALSE) %>%
   mutate_all(str_trim) %>%
-  mutate(filter_vars = map(filter_vars, collect_args),
-         exclude = map(exclude, collect_args)) %>%
+  mutate(filter_vars = map(filter_vars, collect_args)) %>%
   left_join(dir_tbl, by = "dataset_type")
 
 # read in all 
@@ -39,8 +38,8 @@ my_data <- tibble(fns = dir(file.path(datasets_directory, "LINCS-data"),
 #            xlab="rank",
 #            ylab="differential expression score",
 #            main="score vs. rank"))
-# create drug df from excel file of drugs
 
+# create drug df from excel file of drugs
 drugs_moa_df <- create_my_drugs_df(ref_dir = references_directory)
 
 # read in shared plated IDs from Srila's data
@@ -86,19 +85,13 @@ analysis_dat <- inner_join(
   by = "dataset_type"
 )
 
-
 # analysis apply function
 analysis_res <- apply(analysis_dat, 1, function(args) {
-  # DEBUG: args = analysis_dat[3,]; 
+  # DEBUG: args = analysis_dat[1,]; 
   
   dataset_type <- tolower(args$dataset_type)
   grouping_var <- args$grouping_var
   filter_vars <- force_natural(args$filter_vars)
-  if(any(is.na(force_natural(args$exclude)))){
-    exclude <- ""
-  } else { 
-    exclude <- force_natural(args$exclude)
-  }
   my_obj <- args$data
   
   # DEBUG:  my_obj <- force_natural(args$data)
@@ -120,59 +113,39 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     .$pert_iname
   my_perts <- intersect(HUVEC_HAoSMC_perts, other_perts)
   
-  sub_obj_temp <- my_obj %>%
+  sub_obj <- my_obj %>%
     # non-standard evaluation to find column for group 
     # and filter
     # filter for only perts that show in both cancer and vascular
     filter(pert_iname %in% my_perts) %>%
-    filter(!!sym(grouping_var) %in% filter_vars) %>%
-    # if we are excluding perts, make sure this runs
-    filter(!(pert_iname %in% exclude))
+    filter(!!sym(grouping_var) %in% filter_vars)
   
   #' print some summary information about filtered obj
-  print_helper_info(sub_obj_temp, grouping_var)
-  
-  dir_name <- tibble(!!grouping_var := filter_vars) %>%
-    mutate(new_filter_var = map_chr(filter_vars, str_c, qq("_excl_@{exclude}"))) 
-  
-  if (grouping_var == "pert_class"){
-    sub_obj <- suppressMessages(sub_obj_temp %>% 
-                                  left_join(dir_name) %>%
-                                  dplyr::select(-!!grouping_var) %>%
-                                  rename(!!grouping_var := new_filter_var))
-  } else {
-    sub_obj <- sub_obj_temp
-  }
- 
+  print_helper_info(sub_obj, grouping_var)
   
   full_splt_lst <- split(sub_obj, f = sub_obj[[sym(grouping_var)]])
   stopifnot(length(full_splt_lst) == length(filter_vars))
   
-  
-  output_dirs_lst <- create_od_str(filter_vars = dir_name$new_filter_var,
-                                   output_directory = output_directory, 
-                                   dataset_type = dataset_type, 
-                                   grouping_var = grouping_var
-  ) %>%
-    mutate(dirname_ = .[[1]],
-           !!grouping_var := str_split(string = dirname_, pattern = "_", simplify = TRUE )[,1]); output_dirs_lst
+  output_dirs_lst <- create_od_str(filter_vars,
+                                   output_directory,
+                                   dataset_type, grouping_var
+  )
   
   # check output dir for results
   # stop()
-  directories_to_search <- file.path(output_directory, dataset_type, grouping_var, dir_name$new_filter_var)
   search_string <- "clust_clust_obj|conn_conn_tbl|corr_matrix|diffe_diffe_final_res"
   split_search_string <- str_split(string = search_string, pattern = "\\|", simplify = T)[1,]
-  output_paths <- tibble(path = dir(directories_to_search, 
-                                    full.names = T, recursive = T)) %>%
+  output_paths <- tibble(path = dir(file.path(output_directory, dataset_type, grouping_var, filter_vars), 
+                                    full.names = T,recursive = T)) %>%
     mutate(temp_col = str_extract(string = path, pattern = str_c(filter_vars, collapse = "|"))) %>%
     rename(!!grouping_var := temp_col) %>%
     mutate(extract_path = str_extract(string = path,  
                                       pattern = search_string)) %>%
     na.omit() 
   
-  output_path_check <- nrow(output_paths) == length(split_search_string)*length(directories_to_search); output_path_check
+  output_path_check <- nrow(output_paths) == length(split_search_string)
   
-  # looking for 4 files per condition
+  # looking for 4 files
   if (!output_path_check) {
     message("Did not detected cached output... Starting computation.")
     analysis_result_lst <- run_analysis(full_splt_lst,
@@ -192,12 +165,12 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
       mutate(name = names(res_obj$clust_lst)) %>% 
       pivot_longer(corr_lst:diffe_lst, 
                    names_to = "match", values_to = "lst") %>%
-      rename(!!grouping_var := name) 
+      rename(!!grouping_var := name)
     
-    res_paths_tbl_temp <- left_join(
+    res_paths_tbl_temp <- suppressMessages(left_join(
       output_dirs_lst,
       tbl_res_obj
-    ) %>% suppressMessages()
+    ))
     stopifnot(nrow(res_paths_tbl_temp) == nrow(tbl_res_obj))
     
     # TODO: write ifelse to skip analysis if already cached
@@ -207,9 +180,9 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
       path_col = "path"
     )
     
-    res_paths_tbl <- suppressMessages(left_join(tbl_res_obj, 
-                                                res_paths_tbl_temp %>% 
-                                                  dplyr::select(-lst))) %>%
+    res_paths_tbl <- suppressMessages(left_join(tbl_res_obj,
+                               res_paths_tbl_temp %>%
+                                 dplyr::select(-lst))) %>%
       dplyr::select(match, lst, path, everything())
     
   } else {
@@ -228,64 +201,60 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
       dplyr::select(match, lst, path, !!grouping_var); res_paths_tbl
   }
   message("Done.")
-  
-  my_heatmap_and_dendro_obj_temp <- suppressMessages(res_paths_tbl %>% 
-    pivot_wider(id_cols = !!grouping_var, names_from = match, values_from = lst) %>%
-    arrange(grouping_var) %>%
-    mutate(base_path = file.path(output_directory, dataset_type),
-           which_dat = dataset_type) %>%
-    left_join(output_dirs_lst))
+  # %>%
 
-  # figure out how to get paths easily here
-  # TODO FIX FIX FIX
-  my_dendro_obj <- my_heatmap_and_dendro_obj_temp %>%
-    mutate(dir_path = file.path(base_path, "prettydendros"),
-           path = file.path(dir_path, str_c(dirname_, ".eps"))) %>%
-    distinct(path, .keep_all = TRUE) %>%
-    dplyr::select(-match)
-  walk(unique(my_dendro_obj$dir_path), dir.create, showWarnings = F, recursive = T)
+  
+  my_heatmap_and_dendro_obj_temp <- res_paths_tbl %>% 
+    pivot_wider(id_cols = !!grouping_var, names_from = match, values_from = lst)
+  
+  # needs to take into account split by grouping_var
+  dendro_dirs <- tibble(path = file.path(output_directory,
+                                         dataset_type, 
+                                         "prettydendros"), 
+                        which_dat = dataset_type)
+  
+  dir.create(dendro_dirs$path %>% unique(), 
+             recursive = T, showWarnings = F)
+  my_dendro_obj <- suppressMessages(bind_cols(my_heatmap_and_dendro_obj_temp,
+                                              dendro_dirs))
   
   apply(my_dendro_obj, 1, FUN = function(args_) {
     plot_pretty_dendrogram(args = args_, rotate_dendrogram = TRUE)
   })
   
+  # TODO: HEATMAPS
+  heatmap_dirs <- tibble(path = file.path(output_directory,
+                                          dataset_type, 
+                                          "heatmaps"), 
+                         which_dat = dataset_type)
+  
   input_dat_wide <- tibble(input_data = full_splt_lst, 
-                           !!grouping_var := names(full_splt_lst)) 
+                           temp_col = names(full_splt_lst)) %>%
+    rename(!!grouping_var := temp_col)
+  my_heatmap_obj <- suppressMessages(bind_cols(my_heatmap_and_dendro_obj_temp, 
+                                               heatmap_dirs) %>% 
+                                       left_join(input_dat_wide) %>%
+    mutate(grouping_var = grouping_var))
   
-  my_heatmap_obj <- suppressMessages(left_join(my_heatmap_and_dendro_obj_temp,
-                                               input_dat_wide)) %>%
-    mutate(dir_path = file.path(base_path, "heatmaps"),
-           path = file.path(dir_path, str_c(dirname_, ".eps"))) %>%
-    distinct(path, .keep_all = TRUE)%>%
-    dplyr::select(-match) %>%
-    mutate(grouping_var = grouping_var)
-  
-  walk(unique(my_heatmap_obj$dir_path), dir.create, showWarnings = F, recursive = T)
   
   apply(X = my_heatmap_obj, 1, FUN = function(args_) {
+    plot_heatmap_and_clustering(args = args_)
     plot_heatmap(args = args_)
   })
   
-  diffe_ggplot_outputpath <- my_heatmap_and_dendro_obj_temp %>%
-    mutate(dir_path = file.path(base_path, "volcano_plots"),
-           path = file.path(dir_path, str_c(dirname_, ".eps"))) %>%
-    distinct(path, .keep_all = TRUE)%>%
-    dplyr::select(-match) %>%
-    mutate(grouping_var = grouping_var)
-    
-  walk(diffe_ggplot_outputpath$dir_path, ~ dir.create(.x, recursive = T, showWarnings = F))
   
-  ggplots_diffe <- purrr::transpose(diffe_ggplot_outputpath$diffe_lst)$diffe_ggplot
-  walk2(as.list(ggplots_diffe), as.list(diffe_ggplot_outputpath$path), ~ ggsave(filename = .y, plot = .x, width = 14, height = 8))
   
-  message("Done with that batch!!")
+  # stop("Debug")
+  message("Done.")
+  
+  # return(complete_obj)
 })
 
 
 plot_heatmap_and_clustering <- function(args){
   
   # Debug
-  # stop()
+  stop()
   # args$input_data
   gene_names <- unique(args$input_data$pr_gene_symbol)
   mat_temp <- args$input_data %>%

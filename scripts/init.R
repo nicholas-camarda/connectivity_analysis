@@ -4,6 +4,9 @@ library(readxl)
 library(ggsci)
 library(ggpubr)
 
+library(xml2)
+library(XML)
+
 library(RColorBrewer)
 
 # bioconductor pacakges that need to be installed manually
@@ -91,6 +94,7 @@ source(file.path(working_directory, "helper_scripts", "data_wrangling_helper_fun
 
 
 #' @note constants
+drug_bank_database_fn <- file.path(references_directory, "full database.xml")
 rerun_clustering <- TRUE; rerun_diffe <- TRUE;
 set_run_organization <- c("pert_iname", "drug_class", "all")
 cancer_vs_non_cancer <- TRUE; plot_morpheus_toggle <- FALSE
