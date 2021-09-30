@@ -536,8 +536,8 @@ run_diffe <- function(dat, cob, dname) {
   # stop()
   diffe_g <- ggplot(diffe_final_res %>% na.omit()) + 
     geom_point(aes(x = fc, y = -log10(p_val_boot_bh), color = directional_stat), size = 2) +
-    geom_vline(xintercept=c(2^-LOGFC_CUTOFF, 2^LOGFC_CUTOFF), col="purple", alpha = 0.5) +
-    geom_hline(yintercept=-log10(0.1), col="red", alpha = 0.5) +
+    geom_vline(xintercept = as.numeric(c(2^-LOGFC_CUTOFF, 2^LOGFC_CUTOFF)), col="purple") + # , alpha = 0.5
+    geom_hline(yintercept = as.numeric(-log10(0.1)), col="red") +
     geom_label_repel(signif_df,
                      mapping = aes(x = fc, y = -log10(p_val_boot_bh), label = label_), force = 5,
                      min.segment.length = unit(0, 'lines')) +
@@ -556,7 +556,7 @@ run_diffe <- function(dat, cob, dname) {
   
   if (nrow(clust_label_df) > 1) {
     diffe_g <- diffe_g +
-      facet_grid(~base_clust_comp_name, scales = "free_x") 
+      facet_grid(~base_clust_comp_name) 
   }
   diffe_g
   # message("Done")

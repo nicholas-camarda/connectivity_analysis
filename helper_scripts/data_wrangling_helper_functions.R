@@ -38,7 +38,6 @@ find_duplicates <- function(tbl) {
 #' @param dtype_ the dataset type of the GCT, e.g. P100 or GCP
 #' @return a merged object that contains all P100 or GCP data
 read_and_summarize_data <- function(l, dtype_) {
-  
   res_temp <- data.table::rbindlist(l$data, fill = TRUE, use.names = TRUE) %>% 
     as_tibble() %>%
     mutate(which_dat = dtype_) %>%

@@ -1,5 +1,4 @@
 # source the init.R file first
-options(error = recover)
 source(file.path("scripts", "init.R"))
 
 cat("\nReading and merging data...")
@@ -15,7 +14,6 @@ analysis_dat_temp <- read_csv(analysis_fn, comment = "#",
          exclude = map(exclude, collect_args)) %>%
   left_join(dir_tbl, by = "dataset_type")
 
-# read in all 
 my_data <- tibble(fns = dir(file.path(datasets_directory, "LINCS-data"), 
                             full.names = T, recursive = T)) %>%
   distinct() %>% 
@@ -31,16 +29,6 @@ my_data <- tibble(fns = dir(file.path(datasets_directory, "LINCS-data"),
   mutate(data = map(.x = gct, .f = melt_gct)) %>%
   inner_join(analysis_dat_temp, by= "dataset_type")
 
-
-# # plot z-score vs rank for the first 25 genes (rows)
-# ranked_m <- mat(my_ds_rank_by_column)
-# print(plot(ranked_m[1:25, ],
-#            m[1:25, ],
-#            xlab="rank",
-#            ylab="differential expression score",
-#            main="score vs. rank"))
-# create drug df from excel file of drugs
-
 drugs_moa_df <- create_my_drugs_df(ref_dir = references_directory)
 
 # read in shared plated IDs from Srila's data
@@ -55,23 +43,25 @@ shared_plate_ids <- shared_plate_id_df$shared_plate_ids
 my_data_lst <- my_data %>% 
   split(.$dataset_type) 
 dataset_type_col <- names(my_data_lst)
+
+message("Reading and summarizing data...")
 my_data_obj_final <- tibble(dataset_type = dataset_type_col, 
                             # combine the data rows into a single dataset, and nest it
                             data = map2(my_data_lst, dataset_type, .f = read_and_summarize_data))
 
-# grab drugs
+# grab drugs from BOTH P100 and GCP
 my_temp_obj <- bind_rows(my_data_obj_final$data) %>% 
   ungroup() 
-vascular_cells <- c("HUVEC", "HAoSMC")
+
 HUVEC_HAoSMC_perts <- my_temp_obj %>% 
-  filter(cell_id %in% vascular_cells) %>% 
+  filter(cell_id %in% vascular_char_vec) %>% 
   ungroup() %>% 
   dplyr::select(pert_iname) %>% 
   .$pert_iname %>% 
   unique()
 other_perts <- my_temp_obj %>% 
   ungroup() %>%
-  filter(!(cell_id %in% vascular_cells)) %>% 
+  filter(!(cell_id %in% vascular_char_vec)) %>% 
   distinct(pert_iname) %>% 
   .$pert_iname
 my_perts <- intersect(HUVEC_HAoSMC_perts, other_perts)
@@ -89,7 +79,7 @@ analysis_dat <- inner_join(
 
 # analysis apply function
 analysis_res <- apply(analysis_dat, 1, function(args) {
-  # DEBUG: args = analysis_dat[3,]; 
+  # DEBUG: args = analysis_dat[1,]; 
   
   dataset_type <- tolower(args$dataset_type)
   grouping_var <- args$grouping_var
@@ -100,25 +90,28 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     exclude <- force_natural(args$exclude)
   }
   my_obj <- args$data
+  message("Excluding: ", exclude)
   
   # DEBUG:  my_obj <- force_natural(args$data)
   
   # this is convenient to filter the drugs out here... 
   # but probably not the most intelligent design
   # need to filter out by group of analysis, e.g. per kinase inhibitor, per epigenetics, etc
-  vascular_cells <- c("HUVEC", "HAoSMC")
   HUVEC_HAoSMC_perts <- my_obj %>% 
-    filter(cell_id %in% vascular_cells) %>% 
+    filter(cell_id %in% vascular_char_vec) %>% 
     ungroup() %>% 
     dplyr::select(pert_iname) %>% 
     .$pert_iname %>% 
     unique()
+  
   other_perts <- my_obj %>% 
     ungroup() %>%
-    filter(!(cell_id %in% vascular_cells)) %>% 
+    filter(!(cell_id %in% vascular_char_vec)) %>% 
     distinct(pert_iname) %>% 
     .$pert_iname
+  
   my_perts <- intersect(HUVEC_HAoSMC_perts, other_perts)
+  
   
   sub_obj_temp <- my_obj %>%
     # non-standard evaluation to find column for group 
@@ -132,11 +125,11 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   #' print some summary information about filtered obj
   print_helper_info(sub_obj_temp, grouping_var)
   
-  dir_name <- tibble(!!grouping_var := filter_vars) %>%
+  dir_name_df <- tibble(!!grouping_var := filter_vars) %>%
     mutate(new_filter_var = map_chr(filter_vars, str_c, qq("_excl_@{exclude}"))) 
   
   sub_obj <- sub_obj_temp %>% 
-    left_join(dir_name) %>%
+    left_join(dir_name_df) %>%
     ungroup() %>% 
     dplyr::select(-!!grouping_var) %>%
     rename(!!grouping_var := new_filter_var) %>% 
@@ -145,7 +138,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   full_splt_lst <- split(sub_obj, f = sub_obj[[sym(grouping_var)]])
   stopifnot(length(full_splt_lst) == length(filter_vars))
   
-  output_dirs_lst <- create_od_str(filter_vars = dir_name$new_filter_var,
+  output_dirs_lst <- create_od_str(filter_vars = dir_name_df$new_filter_var,
                                    output_directory = output_directory, 
                                    dataset_type = dataset_type, 
                                    grouping_var = grouping_var
@@ -153,9 +146,38 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     mutate(dirname_ = .[[1]],
            !!grouping_var := str_split(string = dirname_, pattern = "_", simplify = TRUE )[,1]); output_dirs_lst
   
+  message("Plotting pert-cell distribution data...")
+  debug_plot_directory <- file.path(output_directory, dataset_type, "plots", "summaries")
+  dir.create(debug_plot_directory, recursive = T, showWarnings = F)
+  
+  prop_pert_df <- tibble(filter_vars = dir_name_df$new_filter_var,
+                         data = full_splt_lst) %>%
+    mutate(dirname_ = .[[1]],
+           !!grouping_var := str_split(string = dirname_, pattern = "_", simplify = TRUE )[,1]) %>%
+    mutate(prop_df = map(data, function(d){
+      res <- d %>% group_by(cell_id, pert_iname) %>% 
+        dplyr::summarize( n = n(), .groups = "keep") %>%
+        group_by(cell_id) %>% 
+        mutate(prop = n / sum(n))
+      return(res)
+    })) %>% 
+    mutate(gplot = map(prop_df, function(d) {
+      gplot <- ggbarplot(data = d, x = "cell_id", y="prop", fill = "pert_iname",
+                         palette = "igv", ggtheme = theme_bw()) + 
+        ggtitle("Proportion of therapies used in each cell type")
+      return(gplot)
+    })) %>%
+    mutate(gplot_base_dir = debug_plot_directory,
+           gplot_path = file.path(gplot_base_dir, str_c( dirname_, "--prop-of-drugs-per-cell.pdf")))
+  
+  walk2(as.list(prop_pert_df$gplot), as.list(prop_pert_df$gplot_path), .f = function(x,y) {
+    ggsave(x, filename = y, device = 'pdf', width = 8, height = 10)
+  })
+  
   # check output dir for results
   # stop()
-  directories_to_search <- file.path(output_directory, dataset_type, "cache", grouping_var, unique(dir_name$new_filter_var))
+  cache_output_directory <- file.path(output_directory, dataset_type, "cache", grouping_var)
+  directories_to_search <- file.path(cache_output_directory, unique(dir_name_df$new_filter_var))
   search_string <- "clust_clust_obj|conn_conn_tbl|corr_matrix|diffe_diffe_final_res"
   split_search_string <- str_split(string = search_string, pattern = "\\|", simplify = T)[1,]
   output_paths <- tibble(path = dir(directories_to_search, 
@@ -169,7 +191,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   
   # looking for 4 files per condition
   if (!output_path_check) {
-    message("Did not detected cached output... Starting computation.")
+    message("Did not detect cached output... Starting computation.")
     analysis_result_lst <- run_analysis(full_splt_lst,
                                         tie_method = "average", 
                                         use_bootstrap = FALSE, 
@@ -267,6 +289,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     plot_heatmap(args = args_)
   })
   
+  # TODO move diffe plot out of other function
   diffe_ggplot_outputpath <- my_heatmap_and_dendro_obj_temp %>%
     mutate(dir_path = file.path(base_path, "plots", "volcano_plots"),
            path = file.path(dir_path, str_c(dirname_, ".eps"))) %>%
@@ -282,4 +305,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   message("Done with that batch!!")
 })
 
+
+message("\nDone with everything!")
+gc()
 

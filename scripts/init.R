@@ -39,6 +39,7 @@ library(gridExtra)
 # BiocManager::install(c("ComplexHeatmap", "BiocParallel", "cmapR", "circlize"))
 
 ## progress bar ##
+options(ggrepel.max.overlaps = Inf, error = recover)
 handlers(global = TRUE) # no need to wrap every call with_progress
 handlers("progress")
 handlers(handler_progress(
@@ -87,7 +88,6 @@ print_important_directories()
 ## load helper functions ##
 source(file.path(working_directory, "scripts", "dendrograms.R"), local = T)
 source(file.path(working_directory, "scripts", "heatmaps.R"), local = T)
-source(file.path(working_directory, "helper_scripts", "differential_analyte_helper_functions.R"), local = T)
 source(file.path(working_directory, "helper_scripts", "connectivity_and_clustering_helper_functions.R"), local = T)
 source(file.path(working_directory, "helper_scripts", "data_wrangling_helper_functions.R"), local = T)
 # source(file.path(working_directory, "helper_scripts", "morpheus_helper_functions.R"), local = T)
