@@ -1,4 +1,4 @@
-# source the init.R file first
+# source the init.R file firstso
 source(file.path("scripts", "init.R"))
 
 cat("\nReading and merging data...")
@@ -45,9 +45,13 @@ my_data_lst <- my_data %>%
 dataset_type_col <- names(my_data_lst)
 
 message("Reading and summarizing data...")
-my_data_obj_final <- tibble(dataset_type = dataset_type_col, 
-                            # combine the data rows into a single dataset, and nest it
-                            data = map2(my_data_lst, dataset_type, .f = read_and_summarize_data))
+my_data_obj_final <- tibble(
+  dataset_type = dataset_type_col,
+  # combine the data rows into a single dataset, and nest it
+  data = map2(my_data_lst, dataset_type,
+    .f = read_and_summarize_data
+  )
+)
 
 # grab drugs from BOTH P100 and GCP
 my_temp_obj <- bind_rows(my_data_obj_final$data) %>% 
@@ -126,7 +130,10 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   print_helper_info(sub_obj_temp, grouping_var)
   
   dir_name_df <- tibble(!!grouping_var := filter_vars) %>%
-    mutate(new_filter_var = map_chr(filter_vars, str_c, qq("_excl_@{exclude}"))) 
+    mutate(new_filter_var = map_chr(
+      filter_vars, str_c,
+      qq("_excl_@{exclude}")
+    ))
   
   sub_obj <- sub_obj_temp %>% 
     left_join(dir_name_df) %>%
@@ -143,19 +150,29 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
                                    dataset_type = dataset_type, 
                                    grouping_var = grouping_var
   ) %>%
-    mutate(dirname_ = .[[1]],
-           !!grouping_var := str_split(string = dirname_, pattern = "_", simplify = TRUE )[,1]); output_dirs_lst
+    mutate(
+      dirname_ = .[[1]],
+      !!grouping_var := str_split(
+        string = dirname_,
+        pattern = "_", simplify = TRUE
+      )[, 1]
+    )
+    output_dirs_lst
   
   message("Plotting pert-cell distribution data...")
-  debug_plot_directory <- file.path(output_directory, dataset_type, "plots", "summaries")
+  debug_plot_directory <- file.path(
+    output_directory,
+    dataset_type, "plots", "summaries"
+  )
   dir.create(debug_plot_directory, recursive = T, showWarnings = F)
   
   prop_pert_df <- tibble(filter_vars = dir_name_df$new_filter_var,
                          data = full_splt_lst) %>%
     mutate(dirname_ = .[[1]],
-           !!grouping_var := str_split(string = dirname_, pattern = "_", simplify = TRUE )[,1]) %>%
-    mutate(prop_df = map(data, function(d){
-      res <- d %>% group_by(cell_id, pert_iname) %>% 
+           !!grouping_var := str_split(string = dirname_, pattern = "_", 
+           simplify = TRUE )[,1]) %>%
+    mutate(prop_df = map(data, function(d) {
+      res <- d %>% group_by(cell_id, pert_iname) %>%
         dplyr::summarize( n = n(), .groups = "keep") %>%
         group_by(cell_id) %>% 
         mutate(prop = n / sum(n))
@@ -167,11 +184,18 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
         ggtitle("Proportion of therapies used in each cell type")
       return(gplot)
     })) %>%
-    mutate(gplot_base_dir = debug_plot_directory,
-           gplot_path = file.path(gplot_base_dir, str_c( dirname_, "--prop-of-drugs-per-cell.pdf")))
+    mutate(
+      gplot_base_dir = debug_plot_directory,
+      gplot_path = file.path(
+        gplot_base_dir,
+        str_c(dirname_, "--prop-of-drugs-per-cell.pdf")
+      )
+    )
   
-  walk2(as.list(prop_pert_df$gplot), as.list(prop_pert_df$gplot_path), .f = function(x,y) {
-    ggsave(x, filename = y, device = 'pdf', width = 8, height = 10)
+  walk2(as.list(prop_pert_df$gplot), 
+  as.list(prop_pert_df$gplot_path), 
+  .f = function(x,y) {
+    ggsave(x, filename = y, device = "pdf", width = 8, height = 10)
   })
   
   # check output dir for results
@@ -269,12 +293,12 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   apply(my_dendro_obj, 1, FUN = function(args_) {
     plot_pretty_dendrogram(args = args_, rotate_dendrogram = TRUE)
   })
-  
+
   input_dat_wide <- tibble(dirname_ = names(full_splt_lst), 
                            input_data = full_splt_lst) %>%
     mutate(dirname_ = .[[1]],
            !!grouping_var := str_split(string = dirname_, pattern = "_", simplify = TRUE )[,1])
-  
+
   my_heatmap_obj <- suppressMessages(left_join(my_heatmap_and_dendro_obj_temp,
                                                input_dat_wide)) %>%
     mutate(dir_path = file.path(base_path,"plots",  "heatmaps"),
@@ -282,9 +306,9 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     distinct(path, .keep_all = TRUE)%>%
     dplyr::select(-match) %>%
     mutate(grouping_var = grouping_var)
-  
+
   walk(unique(my_heatmap_obj$dir_path), dir.create, showWarnings = F, recursive = T)
-  
+
   apply(X = my_heatmap_obj, 1, FUN = function(args_) {
     plot_heatmap(args = args_)
   })
@@ -297,14 +321,20 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     dplyr::select(-match) %>%
     mutate(grouping_var = grouping_var)
   
-  walk(diffe_ggplot_outputpath$dir_path, ~ dir.create(.x, recursive = T, showWarnings = F))
+  walk(
+    diffe_ggplot_outputpath$dir_path,
+    ~ dir.create(.x, recursive = T, showWarnings = F)
+  )
   
   ggplots_diffe <- purrr::transpose(diffe_ggplot_outputpath$diffe_lst)$diffe_ggplot
-  walk2(as.list(ggplots_diffe), as.list(diffe_ggplot_outputpath$path), ~ ggsave(filename = .y, plot = .x, width = 14, height = 8))
+  walk2(
+    as.list(ggplots_diffe),
+    as.list(diffe_ggplot_outputpath$path), 
+    ~ ggsave(filename = .y, plot = .x, width = 14, height = 8)
+  )
   
   message("Done with that batch!!")
 })
-
 
 message("\nDone with everything!")
 gc()

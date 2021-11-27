@@ -386,12 +386,17 @@ organize_and_plot_heatmap_subfunction <- function(filtered_test_mat,
   names(col_fun_annot1) <- grp_names_char_vec
   block_col_fun_annot1 <- unique(col_fun_annot1)
   
-  col_palette_2_df <- generate_color_palette() 
-  col_fun_annot2 <- col_palette_2_df %>% 
-    filter(pert_iname %in% unique(link_moa_to_pert$pert_iname_temp)) %>% 
-    .$colors
+  # generate pert color palette
   
-  names(col_fun_annot2) <- unique(perturbations_char_vec)
+  # stop()
+  col_palette_2_df <- generate_color_palette() 
+  col_fun_annot2_df <- inner_join(col_palette_2_df, 
+            link_moa_to_pert %>% distinct(pert_iname_temp, pert_iname), 
+            by=c("pert_iname" = "pert_iname_temp")) %>%
+    rename(full_pert_name = pert_iname.y)
+  
+  col_fun_annot2 <- col_fun_annot2_df$colors
+  names(col_fun_annot2) <- col_fun_annot2_df$full_pert_name
   
   cell_color_df <- column_order_df %>% 
     dplyr::select(cell_id) %>%

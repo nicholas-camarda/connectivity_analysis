@@ -10,10 +10,16 @@ library(XML)
 library(RColorBrewer)
 
 # bioconductor pacakges that need to be installed manually
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#   install.packages("BiocManager")
+# BiocManager::install(version = "3.13")
+# BiocManager::install(c("ComplexHeatmap", "cmapR", "circlize", "BiocParrellel"))
 library(cmapR)
 library(circlize)
 library(ComplexHeatmap)
 library(BiocParallel)
+
+
 
 # clustering
 library(cluster)
