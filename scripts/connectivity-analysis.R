@@ -157,6 +157,8 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     rename(!!grouping_var := new_filter_var) %>%
     suppressMessages()
   
+  get_summary_stats
+  
   full_splt_lst <- split(sub_obj, f = sub_obj[[sym(grouping_var)]])
   stopifnot(length(full_splt_lst) == length(filter_vars))
   
@@ -393,55 +395,3 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
 
 message("\nDone with everything!")
 gc()
-
-
-
-# message("Plotting pert-cell distribution data...")
-# debug_plot_directory <- file.path(
-#   output_directory,
-#   dataset_type, "plots", "summaries"
-# )
-# dir.create(debug_plot_directory, recursive = T, showWarnings = F)
-# 
-# prop_pert_df <- tibble(
-#   filter_vars = dir_name_df$new_filter_var,
-#   data = full_splt_lst
-# ) %>%
-#   mutate(
-#     dirname_ = .[[1]],
-#     !!grouping_var := str_split(
-#       string = dirname_, pattern = "_",
-#       simplify = TRUE
-#     )[, 1]
-#   ) %>%
-#   mutate(prop_df = map(data, function(d) {
-#     res <- d %>%
-#       group_by(cell_id, pert_iname) %>%
-#       dplyr::summarize(n = n(), .groups = "keep") %>%
-#       group_by(cell_id) %>%
-#       mutate(prop = n / sum(n))
-#     return(res)
-#   })) %>%
-#   mutate(gplot = map(prop_df, function(d) {
-#     gplot <- ggbarplot(
-#       data = d, x = "cell_id", y = "prop",
-#       fill = "pert_iname",
-#       palette = "igv", ggtheme = theme_bw()
-#     ) +
-#       ggtitle("Proportion of therapies used in each cell type")
-#     return(gplot)
-#   })) %>%
-#   mutate(
-#     gplot_base_dir = debug_plot_directory,
-#     gplot_path = file.path(
-#       gplot_base_dir,
-#       str_c(dirname_, "--prop-of-drugs-per-cell.pdf")
-#     )
-#   )
-# 
-# walk2(as.list(prop_pert_df$gplot),
-#       as.list(prop_pert_df$gplot_path),
-#       .f = function(x, y) {
-#         ggsave(x, filename = y, device = "pdf", width = 8, height = 10)
-#       }
-# )

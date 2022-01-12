@@ -1,106 +1,4 @@
 
-# library(corrr)
-library(ggcorrplot)
-# library(furrr)
-# future::plan(multisession, workers = 8)
-# replicate reproducibility with resepct to cells
-
-
-cor_strct <- function(args) {
-  # DEBUG: args <- analysis_dat[1,]; dat_ <- args$data %>% pluck(1)
-  dat_ <- args$data
-  
-  analytes_ <- unique(dat_$pr_gene_symbol)
-  header_cols <- c("master_id", "replicate_id", "cell_id") # "master_id", "replicate_id", "pert_iname"
-  master_short_dat <- dat_ %>% 
-    dplyr::select(replicate_id, master_id) %>% 
-    distinct()
-  
-  df_temp <- dat_ %>%
-    group_by(replicate_id) %>%
-    pivot_wider(replicate_id, pr_gene_symbol, values_fn = median) %>%
-    left_join(master_short_dat) %>%
-    dplyr::select(master_id, replicate_id, pert_iname, cell_id, everything()) %>%
-    group_by(pert_iname) %>% # cell_id # master_id
-    nest(data = all_of(c(header_cols, analytes_))) %>%
-    ungroup()
-  
-  all_dat_df <- right_join(master_short_dat,
-                        bind_rows(df_temp$data)) %>%
-    nest(all_dat = colnames(.)) %>%
-    suppressMessages()
-  
-
-
-  df <- df_temp %>%
-    bind_cols(all_dat_df) %>%
-    slice(1:10) %>%
-    mutate(res = pmap(.l = list(pert_iname, data, all_dat),  # cell_id
-                       .f = function(id, d, all_d) {
-      
-      # id = df$pert_iname[1]; d = df$data[1] %>% pluck(1); all_d = df$all_dat[1] %>% pluck(1)
-      message(id)
-      # title_ <-                   
-      # removes pert from "all"
-      bkgrd <- anti_join(all_d, d) %>%
-        ungroup() %>%
-        suppressMessages()
-      test <- d 
-      
-      mat_test <- as.matrix(test %>% dplyr::select(all_of(analytes_) ))
-      rownames(mat_test) <- d$replicate_id
-      cor_mat_test <- round(cor(t(mat_test), use = "pairwise.complete.obs"), 3)
-      
-      df_corr_test <- cor_mat_test %>%
-        as.data.frame() %>%
-        rownames_to_column(var = "cor1") %>%
-        as_tibble() %>%
-        mutate(grp = "test", .before = 1) %>%
-        pivot_longer(cols = all_of(d$replicate_id), names_to = "cor2")
-      
-      mat_bkgrd <- as.matrix(bkgrd %>% dplyr::select(all_of(analytes_)))
-      rownames(mat_bkgrd) <- bkgrd$replicate_id
-      cor_mat_bkgrd <- round(cor(t(mat_bkgrd), use = "pairwise.complete.obs"), 3)
-      
-      df_corr_bkgrd <- cor_mat_bkgrd %>%
-        as.data.frame() %>%
-        rownames_to_column(var = "cor1") %>%
-        as_tibble() %>%
-        mutate(grp = "bkgrd", .before = 1) %>%
-        pivot_longer(cols = all_of(bkgrd$replicate_id), names_to = "cor2")
-      
-      cmbd_df_temp <- bind_rows(df_corr_test, df_corr_bkgrd) %>%
-        dplyr::select(-cor1, -cor2)
-      
-      n_cmbd_df <- cmbd_df_temp %>%
-        group_by(grp) %>%
-        tally() %>%
-        mutate(n = format(n, big.mark=",")) %>%
-        mutate(n = str_trim(n))
-      
-      cmbd_df <- cmbd_df_temp %>%
-        left_join(n_cmbd_df, by = "grp") %>%
-        mutate(grp = ifelse(grp == "bkgrd", "Non-replicate", "Replicate")) %>%
-        mutate(grp = str_c(grp, " (n=",n,")"))
-      
-      # g_dens <- ggdensity(cmbd_df, x = "value", fill = "grp", 
-      #           xlab = "Spearman Correlation") +
-      #   ggtitle(id)
-      # 
-      
-      # median_cor_mat <- median(cor_mat, na.rm = TRUE)
-      # ggcorrplot(cor_mat, hc.order = TRUE, outline.col = "white")
-      # res <- list(cmbd_df, g_dens) %>%
-      #   setNames(c("res", "g_dens"))
-      
-      return(cmbd_df)
-    }))
-  df
-  ggdensity(df$res[[3]], x = "value", fill = "grp", add = "mean")
-  
-  return(df)
-}
-
 #' @note load cached objects helper function
 #' @param output_paths takes this dataframe of output paths and results mapping for reading
 #' @param grouping_var takes in the grouping var and ensures correct directory placement
@@ -953,74 +851,153 @@ update_dataset_with_clustering <- function(data, clust_lst) {
 
 
 
+#' @note moved this out of main function
+#' @note needs to be reworked...
+get_debug_stats <- function(output_directory, dataset_type){
+  message("Plotting pert-cell distribution data...")
+  debug_plot_directory <- file.path(
+    output_directory,
+    dataset_type, "plots", "summaries"
+  )
+  dir.create(debug_plot_directory, recursive = T, showWarnings = F)
+  
+  prop_pert_df <- tibble(
+    filter_vars = dir_name_df$new_filter_var,
+    data = full_splt_lst
+  ) %>%
+    mutate(
+      dirname_ = .[[1]],
+      !!grouping_var := str_split(
+        string = dirname_, pattern = "_",
+        simplify = TRUE
+      )[, 1]
+    ) %>%
+    mutate(prop_df = map(data, function(d) {
+      res <- d %>%
+        group_by(cell_id, pert_iname) %>%
+        dplyr::summarize(n = n(), .groups = "keep") %>%
+        group_by(cell_id) %>%
+        mutate(prop = n / sum(n))
+      return(res)
+    })) %>%
+    mutate(gplot = map(prop_df, function(d) {
+      gplot <- ggbarplot(
+        data = d, x = "cell_id", y = "prop",
+        fill = "pert_iname",
+        palette = "igv", ggtheme = theme_bw()
+      ) +
+        ggtitle("Proportion of therapies used in each cell type")
+      return(gplot)
+    })) %>%
+    mutate(
+      gplot_base_dir = debug_plot_directory,
+      gplot_path = file.path(
+        gplot_base_dir,
+        str_c(dirname_, "--prop-of-drugs-per-cell.pdf")
+      )
+    )
+  
+  walk2(as.list(prop_pert_df$gplot),
+        as.list(prop_pert_df$gplot_path),
+        .f = function(x, y) {
+          ggsave(x, filename = y, device = "pdf", width = 8, height = 10)
+        }
+  )
+}
 
 
-#' #' @NOTE: this is SO SO slow
-#' #' @note compute for cell A vs cell B and cell B vs all others (not A)
-#' #' @param cell_corr matrix of correlations among cells
-#' #' @param use_bootstrap logical to calculate boostrapped p-value for the ks.test
-#' compute_connectivity <- function(M, use_bootstrap = FALSE) {
-#'
-#'   # M <- corr_mat_reps %>% slice(1) %>% .$cell_corr_r_mat ; M <- M[[1]]
-#'
-#'   unique_cs <- unique(rownames(M))
-#'   grp_names <- get_grp_names_from_matrix(M, unique_cs)
-#'   unique_cs_idx <- 1:length(rownames(M))
-#'
-#'   cs_tib <- tibble(unique_cs, unique_cs_idx, grp_names)
-#'
-#'   grp_idx <- bind_cols(tibble(
-#'     grp_names = unique(grp_names),
-#'     grp_idx = 1:length(unique(grp_names))
-#'   ))
-#'
-#'   cs_tib <- left_join(cs_tib, grp_idx, by = "grp_names")
-#'   looper <- expand.grid(grp_namesA = unique(cs_tib$grp_names), grp_namesB = unique(cs_tib$grp_names))
-#'
-#'   if (use_bootstrap) message("Using ks.boot")
-#'   conn_df <- looper %>%
-#'     mutate(map2_df(grp_namesA, grp_namesB, function(x, y) {
-#'       # x <- looper$grp_namesA[5]; y <- looper$grp_namesB[5]
-#'
-#'       grpA_idx1 <- cs_tib %>%
-#'         filter(grp_names == x) %>%
-#'         .$unique_cs_idx
-#'
-#'       grpB_idx2 <- cs_tib %>%
-#'         filter(grp_names == y) %>%
-#'         .$unique_cs_idx
-#'
-#'       test <- M[grpA_idx1, grpB_idx2]
-#'
-#'       grpA_idx2 <- cs_tib %>%
-#'         filter(grp_names == y) %>%
-#'         .$unique_cs_idx
-#'
-#'       grpB_idx2 <- cs_tib %>%
-#'         filter(!(grp_names %in% y)) %>%
-#'         .$unique_cs_idx
-#'
-#'       bkg <- M[grpA_idx2, grpB_idx2]
-#'
-#'       if (use_bootstrap) {
-#'         res <- ks.boot(test, bkg, nboots = 1000, alternative = "two.sided")
-#'         connectivity <- res$ks$statistic
-#'         p.val <- res$ks.boot.pvalue
-#'
-#'       } else {
-#'         res <- ks.test(test, bkg, alternative = "two.sided")
-#'         connectivity <- res$statistic
-#'         p.val <- res$p.val
-#'       }
-#'
-#'       if (median(test, na.rm = T) < median(bkg, na.rm = T)) connectivity <- -1 * connectivity
-#'
-#'       cat(".")
-#'       return(tibble(conn = connectivity, p_val = p.val))
-#'
-#'
-#'     })) %>%
-#'     bind_rows()
-#' }
-#'
-# stop("debug here")
+#' @note still working on this...
+cor_strct <- function(args) {
+  # DEBUG: args <- analysis_dat[1,]; dat_ <- args$data %>% pluck(1)
+  dat_ <- args$data
+  
+  analytes_ <- unique(dat_$pr_gene_symbol)
+  header_cols <- c("master_id", "replicate_id", "cell_id") # "master_id", "replicate_id", "pert_iname"
+  master_short_dat <- dat_ %>% 
+    dplyr::select(replicate_id, master_id) %>% 
+    distinct()
+  
+  df_temp <- dat_ %>%
+    group_by(replicate_id) %>%
+    pivot_wider(replicate_id, pr_gene_symbol, values_fn = median) %>%
+    left_join(master_short_dat) %>%
+    dplyr::select(master_id, replicate_id, pert_iname, cell_id, everything()) %>%
+    group_by(pert_iname) %>% # cell_id # master_id
+    nest(data = all_of(c(header_cols, analytes_))) %>%
+    ungroup()
+  
+  all_dat_df <- right_join(master_short_dat,
+                           bind_rows(df_temp$data)) %>%
+    nest(all_dat = colnames(.)) %>%
+    suppressMessages()
+  
+  
+  
+  df <- df_temp %>%
+    bind_cols(all_dat_df) %>%
+    slice(1:10) %>%
+    mutate(res = pmap(.l = list(pert_iname, data, all_dat),  # cell_id
+                      .f = function(id, d, all_d) {
+                        
+                        # id = df$pert_iname[1]; d = df$data[1] %>% pluck(1); all_d = df$all_dat[1] %>% pluck(1)
+                        message(id)
+                        # title_ <-                   
+                        # removes pert from "all"
+                        bkgrd <- anti_join(all_d, d) %>%
+                          ungroup() %>%
+                          suppressMessages()
+                        test <- d 
+                        
+                        mat_test <- as.matrix(test %>% dplyr::select(all_of(analytes_) ))
+                        rownames(mat_test) <- d$replicate_id
+                        cor_mat_test <- round(cor(t(mat_test), use = "pairwise.complete.obs"), 3)
+                        
+                        df_corr_test <- cor_mat_test %>%
+                          as.data.frame() %>%
+                          rownames_to_column(var = "cor1") %>%
+                          as_tibble() %>%
+                          mutate(grp = "test", .before = 1) %>%
+                          pivot_longer(cols = all_of(d$replicate_id), names_to = "cor2")
+                        
+                        mat_bkgrd <- as.matrix(bkgrd %>% dplyr::select(all_of(analytes_)))
+                        rownames(mat_bkgrd) <- bkgrd$replicate_id
+                        cor_mat_bkgrd <- round(cor(t(mat_bkgrd), use = "pairwise.complete.obs"), 3)
+                        
+                        df_corr_bkgrd <- cor_mat_bkgrd %>%
+                          as.data.frame() %>%
+                          rownames_to_column(var = "cor1") %>%
+                          as_tibble() %>%
+                          mutate(grp = "bkgrd", .before = 1) %>%
+                          pivot_longer(cols = all_of(bkgrd$replicate_id), names_to = "cor2")
+                        
+                        cmbd_df_temp <- bind_rows(df_corr_test, df_corr_bkgrd) %>%
+                          dplyr::select(-cor1, -cor2)
+                        
+                        n_cmbd_df <- cmbd_df_temp %>%
+                          group_by(grp) %>%
+                          tally() %>%
+                          mutate(n = format(n, big.mark=",")) %>%
+                          mutate(n = str_trim(n))
+                        
+                        cmbd_df <- cmbd_df_temp %>%
+                          left_join(n_cmbd_df, by = "grp") %>%
+                          mutate(grp = ifelse(grp == "bkgrd", "Non-replicate", "Replicate")) %>%
+                          mutate(grp = str_c(grp, " (n=",n,")"))
+                        
+                        # g_dens <- ggdensity(cmbd_df, x = "value", fill = "grp", 
+                        #           xlab = "Spearman Correlation") +
+                        #   ggtitle(id)
+                        # 
+                        
+                        # median_cor_mat <- median(cor_mat, na.rm = TRUE)
+                        # ggcorrplot(cor_mat, hc.order = TRUE, outline.col = "white")
+                        # res <- list(cmbd_df, g_dens) %>%
+                        #   setNames(c("res", "g_dens"))
+                        
+                        return(cmbd_df)
+                      }))
+  df
+  ggdensity(df$res[[3]], x = "value", fill = "grp", add = "mean")
+  
+  return(df)
+}
