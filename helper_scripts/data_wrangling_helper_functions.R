@@ -1,4 +1,44 @@
 
+#' @note write diffe objects to file
+#' @param ggplots_diffe list of faceted ggplots to plot
+#' @param ggplots_diffe_singles list of single ggplots to plot
+#' @param names_tbl file name and ggplot mapping table
+write_diffe_objs_to_file <- function(ggplots_diffe, ggplots_diffe_singles, names_tbl, lvl4_bool_data){
+  
+  if (lvl4_bool_data) {
+    width_ <- 14
+    height_ <- 8
+  } else {
+    width_ <- 16
+    height_ <- 16
+  }
+  walk2(
+    as.list(ggplots_diffe),
+    as.list(names_tbl$path_group_eps),
+    ~ ggsave(filename = .y, plot = .x, width = width_, height = height_, device = cairo_ps)
+  )
+  
+  walk2(
+    as.list(ggplots_diffe),
+    as.list(names_tbl$path_group_pdf),
+    ~ ggsave(filename = .y, plot = .x, width = width_, height = height_)
+  )
+  
+  # plot the singles
+  # for (i in )
+  walk2(
+    as.list(ggplots_diffe_singles), 
+    as.list(names_tbl$path_single_eps),
+    ~ ggsave(filename = .y, plot = .x, width = width_, height = height_, device = cairo_ps)
+  )
+  
+  walk2(
+    as.list(ggplots_diffe_singles), 
+    as.list(names_tbl$path_single_pdf),
+    ~ ggsave(filename = .y, plot = .x, width = width_, height = height_)
+  )
+}
+
 #' @note plot missing values
 #' @param sub_obj sub_obj filtered 
 plot_missing <- function(sub_obj){
@@ -42,7 +82,8 @@ read_and_summarize_data <- function(l, dtype_) {
     as_tibble() %>%
     mutate(which_dat = dtype_) %>%
     mutate(cell_id = ifelse(cell_id == "Pericytes", "Pericyte", cell_id)) %>%
-    mutate(pert_iname = tolower(pert_iname)) %>%
+    mutate(pert_iname = tolower(pert_iname),
+           det_normalization_group_vector = as.character(det_normalization_group_vector)) %>%
     ## inner join to only do drugs that I pick!!
     inner_join(drugs_moa_df, by = "pert_iname") %>%
     dplyr::rename( 
@@ -56,10 +97,10 @@ read_and_summarize_data <- function(l, dtype_) {
     dplyr::select(master_id, replicate_id, everything()) %>%
     # group_by(replicate_id, pr_gene_symbol) %>%
     distinct(replicate_id, pr_gene_symbol, value, .keep_all = TRUE); res_temp
-  
+
   if ("pr_gcp_histone_mark" %in% colnames(res_temp)) {
     # no need to do unique names for the histones...
-    
+
     res <- res_temp %>%
       mutate(pr_gcp_histone_mark = str_trim(pr_gcp_histone_mark,"both")) %>%
       mutate(mark = pr_gcp_histone_mark, 
@@ -79,7 +120,8 @@ read_and_summarize_data <- function(l, dtype_) {
     
     res_temp2 <- res_temp %>%
       rename(mark = pr_p100_phosphosite) %>%
-      left_join(unique_gene_names_df, by = c("pr_gene_symbol", "mark", "pr_p100_modified_peptide_code")) %>%
+      left_join(unique_gene_names_df, 
+      by = c("pr_gene_symbol", "mark", "pr_p100_modified_peptide_code")) %>%
       rename(non_unique_pr_gene_symbol = pr_gene_symbol) %>%
       rename(pr_gene_symbol = pr_gene_symbol_u)
     
@@ -152,7 +194,11 @@ create_od_str <- function(filter_vars = c("Epigenetic", "Kinase Inhibitor"),
                           dirs_to_make = c("corr", "conn", "clust", "diffe")) {
   message("Creating top output directory: ")
   
-  specific_output_dir <- file.path(output_directory, tolower(dataset_type), "cache", grouping_var)
+  specific_output_dir <- file.path(output_directory, 
+                                   tolower(dataset_type), 
+                                   "cache", 
+                                   grouping_var)
+  
   dir.create(specific_output_dir, showWarnings = FALSE, recursive = TRUE)
   message(qq("@{specific_output_dir}"))
   

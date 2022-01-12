@@ -6,13 +6,10 @@
 #' @note this function gets called in plot_pretty_dendrogram to generate the informative labels from hard code
 create_informative_labels <- function(){
   # num_grps_cells = 3
-  
   #' colors: 
-  #' https://www.colorhexa.com/
-  # colors <- brewer.pal(num_grps_cells, "Dark2") # cancer, not cancer / not vascular, vascular
-  # colors <- c("#1eb6ff", "#ffd81e", "#000000", "#ff671e") # pal_igv("alternating")(2)
+   # https://www.w3schools.com/colors/colors_palettes.asp
   colors <- c("#ff677f", "#ffe766", "#225ea8", "#41b6c4", "#9ba2ff", "#ffb781")
-  cell_colors <- c("#ffb781", "#9ba2ff", viridis::plasma(7))
+  cell_colors <- c("#ffb781", "#9ba2ff", "#c1946a", "#618685", "#b9b0b0", "#80ced6", "#f4e1d2", "#82b74b", "#50394c")
   # names(colors) <- c("blue", "yellow", "black", "orange")
   # "#a1dab4", green
   names(colors) <- c("light red", "yellow", "dark blue", "light blue", "light purple", "orange")
@@ -63,12 +60,15 @@ plot_pretty_dendrogram <- function(args,
                                    rotate_dendrogram = FALSE) {
   # args <- my_clust_obj[2,]
   
-  data <- args$clust_lst
+  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-p100-perti-dendro.RData")
+  # load("debug/debug_dat/debug-p100-perti-dendro.RData")
+  # stop()
+  data <- args$lst
   
   # base_output_dir <- force_natural(args$path)
   
   dataset <- force_natural(args$which_dat)
-  fn_name_s <- force_natural(args[1])
+  fn_name_s <- force_natural(args$dirname_)
   plot_title <- qq("Hierarchical clustering on connectivity matrix\n@{fn_name_s} || @{dataset}")
   dendro_output_fn <- force_natural(args$path)
   
@@ -89,6 +89,7 @@ plot_pretty_dendrogram <- function(args,
   vasc_top_labels_df <- tibble(lbs = labels(hclust_dend)) %>% 
     mutate(dend_order = 1:nrow(.)) %>%
     left_join(informative_labels_df, by="lbs") 
+  
   # right juxtapose huvec/haosmc
   dend_order_int_vec <- vasc_top_labels_df$dend_order
   last_2_positions <- c(length(dend_order_int_vec)-1, length(dend_order_int_vec))
@@ -97,6 +98,10 @@ plot_pretty_dendrogram <- function(args,
   vasc_dend_pos <- filter(vasc_top_labels_df, grp == "Vascular cells")$dend_order
   names_vasc_dend_pos <- vasc_top_labels_df$lbs[vasc_dend_pos]
   
+  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-p100-perti-dendro.RData")
+  # load("debug/debug_dat/debug-p100-perti-dendro.RData")
+  # stop()
+{
   if ( !any(vasc_dend_pos %in% last_2_positions)  ) { #& co_clust
     message("\n Re-organizing labels to 'right-justify' vascular cells") 
     # ensure vasc is last
@@ -104,8 +109,7 @@ plot_pretty_dendrogram <- function(args,
     # switch the names and positions of the last positions with 
     names_involved <-  c(names_vasc_dend_pos,names_last_2_position)
     to_join_original_df <- filter(vasc_top_labels_df, !(lbs %in% names_involved)) 
-    # %>%
-    #   mutate(new_dend_order = dend_order)
+
     vasc_top_labels_df <- tibble(lbs = c(names_vasc_dend_pos,names_last_2_position), 
                                  dend_order = c(last_2_positions,vasc_dend_pos)) %>% # this could be renamed to 'new_dend_labels' t
       left_join(vasc_top_labels_df %>% dplyr::select(-dend_order),by="lbs") %>% # give their lbs their properties back
@@ -149,121 +153,159 @@ plot_pretty_dendrogram <- function(args,
   # pdf_height <- 10
   # pdf_width <- 18
   # INSET_MARGIN_VERT <- -0.06
-  
-  
   pdf_height <- 21
   pdf_width <- 35
+  # define new file for pdf
+  dendro_output_fn_pdf <- file.path(str_c(str_split(dendro_output_fn, pattern = "\\.", simplify = TRUE)[,1], ".pdf", sep = ""))
   
-  setEPS()
-  postscript(file = dendro_output_fn, height = pdf_height, width = pdf_width, onefile = F)
-  # pdf(file = dendro_output_fn, width = pdf_width, height = pdf_height, onefile = FALSE) # for some reason, without onefile = F, the pdf gets printed on the second page, with a blank page to start.. weird
-  plot.new(); i <- 0
-  # par(mar = c(2,2,2,2),
-  par(mar = c(7,12,7,14), # c(bottom, left, top, right)
-      cex = 2.2, # adjust plotting text size (not title or legend)
-      xpd = TRUE)  # allow plotting outside window
-  
-  branch_lwd_set <- 8
-  cell_dend_color_leave_edges <- hclust_dend %>% 
-    assign_values_to_leaves_edgePar(hclust_dend, 
-                                    value = informative_labels_df_ordered$color, 
-                                    edgePar = "col") %>% # this function replaces colLab 
-    set("branches_lwd", branch_lwd_set) %>%
-    set("labels", informative_labels_df_ordered$new_lbs) 
-  
-  if (rotate_dendrogram){
-    message("rotating dendro")
-    cell_dend_color_leave_edges <- cell_dend_color_leave_edges %>% 
-      rotate(labels_char_vec) # rotate the dendrogram according to labels_char_vec
-  }
-  
-  # border colors; 1 = black, 2 = red, 3 = green, 4 = light blue, 5 = cyan, 6 =magenta, 7 = gold/yellow, 8 = gray, 9 = repeats back to black
-  # lty : 1 = solid, 2 = short dash, 3 = dot 4 = dot and short dash alt, 5 = long dash, 6= tight short dash / dot, 7 = repeats back to solid
-  rect_lty_set <- 2 
-  border_color_set <- 8 
-  rect_lwd_set <- branch_lwd_set / 1.5
-  plot(cell_dend_color_leave_edges, 
-       main = plot_title, 
-       bty='L', xlim = c(2,0), # to help standardize x-axis for comparison
-       cex.main = 2.5, # main title text size
-       horiz = T, # horizontal
-       axes = T)   # remove height with axes = F
-  
-  if (rotate_dendrogram){
-    message("rotating rect boxes")
-    rect.dendrogram(tree = cell_dend_color_leave_edges %>% rotate(labels_char_vec), # %>% rotate(labels_char_vec), 
-                    k = max_n_clusts, # draw boxes around clusters # lower_rect = par("usr")[2L]*-0.25, # draw from right to left
-                    border = border_color_set, horiz = T, # horizontal plot
-                    lwd = rect_lwd_set, lty = rect_lty_set,
-                    lower_rect = dend_height*-0.1718011 - 0.009845852,
-                    # lower_rect = dend_height*-0.156641 + pdf_height*0.000286 - 0.020006,
-                    xpd = NA)  # take the bottom border and increse slightly
+  # main plot
+  to_plot <- function() {
+    # branch leaf thickness
+    branch_lwd_set <- 15
+    cell_dend_color_leave_edges <- hclust_dend %>% 
+      assign_values_to_leaves_edgePar(hclust_dend, 
+                                      value = informative_labels_df_ordered$color, 
+                                      edgePar = "col") %>% # this function replaces colLab 
+      set("branches_lwd", branch_lwd_set) %>%
+      set("labels", informative_labels_df_ordered$new_lbs) %>%
+      set("labels_cex", 1.2)
     
-  } else{
-    rect.dendrogram(tree = cell_dend_color_leave_edges, # %>% rotate(labels_char_vec), 
-                    k = max_n_clusts, # draw boxes around clusters # lower_rect = par("usr")[2L]*-0.25, # draw from right to left
-                    border = border_color_set, horiz = T, # horizontal plot
-                    lwd = rect_lwd_set, lty = rect_lty_set,
-                    lower_rect = dend_height*-0.1718011 - 0.009845852,
-                    # lower_rect = dend_height*-0.156641 + pdf_height*0.000286 - 0.020006,
-                    xpd = NA)  # take the bottom border and increse slightly
+    if (rotate_dendrogram){
+      message("rotating dendro")
+      cell_dend_color_leave_edges <- cell_dend_color_leave_edges %>% 
+        rotate(labels_char_vec) # rotate the dendrogram according to labels_char_vec
+    }
+    
+    # border colors; 1 = black, 2 = red, 3 = green, 4 = light blue, 5 = cyan, 6 =magenta, 7 = gold/yellow, 8 = gray, 9 = repeats back to black
+    # lty : 1 = solid, 2 = short dash, 3 = dot 4 = dot and short dash alt, 5 = long dash, 6= tight short dash / dot, 7 = repeats back to solid
+    rect_lty_set <- 2 
+    border_color_set <- 8 
+    # thickness
+    rect_lwd_set <- branch_lwd_set / 1.5
+    plot(cell_dend_color_leave_edges, 
+         main = plot_title, 
+         bty='L', xlim = c(2.5,0), # to help standardize x-axis for comparison
+         cex.main = 2.5, # main title text size
+         cex.axis = 1.75, # axis text size
+         horiz = T, # horizontal
+         axes = T)  # remove height with axes = F
+    
+    # leaf text size
+    # set(cell_dend_color_leave_edges, "labels_cex", 8)
+    # 
+    if (rotate_dendrogram){
+      message("rotating rect boxes")
+      rect.dendrogram(tree = cell_dend_color_leave_edges %>% rotate(labels_char_vec), # %>% rotate(labels_char_vec), 
+                      k = max_n_clusts, # draw boxes around clusters # lower_rect = par("usr")[2L]*-0.25, # draw from right to left
+                      border = border_color_set, horiz = T, # horizontal plot
+                      lwd = rect_lwd_set, lty = rect_lty_set,
+                      lower_rect = dend_height*-0.1718011 - 0.05,
+                      # lower_rect = dend_height*-0.156641 + pdf_height*0.000286 - 0.020006,
+                      xpd = NA)  # take the bottom border and increse slightly
+      
+    } else{
+      rect.dendrogram(tree = cell_dend_color_leave_edges, # %>% rotate(labels_char_vec), 
+                      k = max_n_clusts, # draw boxes around clusters # lower_rect = par("usr")[2L]*-0.25, # draw from right to left
+                      border = border_color_set, horiz = T, # horizontal plot
+                      lwd = rect_lwd_set, lty = rect_lty_set,
+                      lower_rect = dend_height*-0.1718011 - 0.05,
+                      # lower_rect = dend_height*-0.156641 + pdf_height*0.000286 - 0.020006,
+                      xpd = NA)  # take the bottom border and increse slightly
+    }
+    
+    # draw colored bars below dend
+    if (rotate_dendrogram){
+      message("rotating color bar")
+      new_color_order <- tibble(new_lbs = labels(cell_dend_color_leave_edges), 
+                                order = 1:length(labels(cell_dend_color_leave_edges)))
+      color_bars <- suppressMessages(left_join(vasc_top_labels_df_rotated_order %>% 
+                                                 dplyr::select(new_lbs, color, vasc_grp_color), new_color_order ) %>%
+                                       arrange(order) %>% 
+                                       dplyr::select(vasc_grp_color, color))
+      colored_bars(dend = cell_dend_color_leave_edges %>% rotate(labels_char_vec), 
+                   horiz = T,
+                   colors = color_bars,
+                   sort_by_labels_order = FALSE, add = T, rowLabels = "")
+    } else {
+      color_bars <- informative_labels_df_ordered %>% 
+        dplyr::select(vasc_grp_color, color)
+      colored_bars(dend = cell_dend_color_leave_edges, horiz = T,
+                   colors = color_bars,
+                   sort_by_labels_order = FALSE, add = T, rowLabels = "")
+    }
+    
+    
+    num_grps <- length(unique(informative_labels_df$grp)) + 1 # plus 1 for the 'non-vasc' group, essential unique sum of both columns grp, and grp_l
+    
+    # stop()
+    non_vasc_color <- unique(informative_labels_df_ordered %>% filter(grp != "Vascular cells") %>% .$vasc_grp_color)
+    vasc_color <- unique(informative_labels_df_ordered %>% filter(grp == "Vascular cells") %>% .$vasc_grp_color)
+    
+    # "topright"
+    # x = max(dend_height) + 0.25, y = 9.55
+    leg_temp <- bind_rows(informative_labels_df_ordered %>% distinct(grp_l, color, vasc_grp_color) %>% rename(grp = grp_l),
+                          informative_labels_df_ordered %>% distinct(grp_l2, color, vasc_grp_color) %>% rename(grp = grp_l2),
+                          informative_labels_df_ordered %>% distinct(grp, color, vasc_grp_color) ) %>%
+      distinct(grp, color, vasc_grp_color) %>%
+      mutate(grp = factor(grp, levels = c("HUVEC", "HAoSMC", "Cancer cells", "Other cells", "Vascular cells", "Non-vascular cells"))) %>%
+      arrange(grp)
+    leg_ <- bind_rows(leg_temp %>% slice(1:4) %>% dplyr::select(grp, color), 
+                      leg_temp %>% slice(5:8) %>% distinct(grp, vasc_grp_color) %>% rename(color = vasc_grp_color))
+    
+    leg_final <- c(as.character(leg_$grp), "Cluster assignment")
+    col_final <- c(leg_$color, border_color_set)
+    
+    # stop()
+    
+    xpos <- dend_height + 0.85
+    ypos <- ifelse(rotate_dendrogram, xpos*2, xpos + 7.65)
+    legend( x = xpos, y = ypos , title = "Legend", text.font = 3,
+            legend = leg_final,
+            col = col_final, 
+            lty = c(rep(1,length(leg_final)-1), rect_lty_set), # line style 
+            lwd = c(rep(14, length(leg_final)-1), 5), # line width
+            cex = 2.5, 
+            inset = c(INSET_MARGIN)+1.2,
+            yjust = 1.2) # legend size
+
   }
   
-  # draw colored bars below dend
-  if (rotate_dendrogram){
-    message("rotating color bar")
-    new_color_order <- tibble(new_lbs = labels(cell_dend_color_leave_edges), 
-                              order = 1:length(labels(cell_dend_color_leave_edges)))
-    color_bars <- suppressMessages(left_join(vasc_top_labels_df_rotated_order %>% 
-                              dplyr::select(new_lbs, color, vasc_grp_color), new_color_order ) %>%
-      arrange(order) %>% 
-      dplyr::select(vasc_grp_color, color))
-    colored_bars(dend = cell_dend_color_leave_edges %>% rotate(labels_char_vec), 
-                 horiz = T,
-                 colors = color_bars,
-                 sort_by_labels_order = FALSE, add = T, rowLabels = "Cell group\nidentity")
-  } else {
-    color_bars <- informative_labels_df_ordered %>% 
-      dplyr::select(vasc_grp_color, color)
-    colored_bars(dend = cell_dend_color_leave_edges, horiz = T,
-                 colors = color_bars,
-                 sort_by_labels_order = FALSE, add = T, rowLabels = "Cell group\nidentity")
+  
+  plot_eps <- function() {
+
+    setEPS()
+    postscript(bg = "white", colormodel = "cmyk", file = dendro_output_fn, 
+               height = pdf_height, width = pdf_width, onefile = F)
+    # pdf(file = dendro_output_fn, width = pdf_width, height = pdf_height, onefile = FALSE) # for some reason, without onefile = F, the pdf gets printed on the second page, with a blank page to start.. weird
+    plot.new(); i <- 0
+    # par(mar = c(2,2,2,2),
+    par(mar = c(7,14,7,14), # c(bottom, left, top, right)
+        cex = 2.2, # adjust plotting text size (not title or legend)
+        xpd = TRUE)  # allow plotting outside window
+    
+    # run the plotting
+    to_plot()
+    dev.off()
+  }
+  plot_pdf <- function() {
+    pdf(file = dendro_output_fn_pdf, height = pdf_height, width = pdf_width, onefile = F)
+    # pdf(file = dendro_output_fn, width = pdf_width, height = pdf_height, onefile = FALSE) # for some reason, without onefile = F, the pdf gets printed on the second page, with a blank page to start.. weird
+    plot.new(); i <- 0
+    # par(mar = c(2,2,2,2),
+    par(mar = c(7,14,7,14), # c(bottom, left, top, right)
+        cex = 2.2, # adjust plotting text size (not title or legend)
+        xpd = TRUE)  # allow plotting outside window
+    
+    # run the plotting
+    to_plot()
+    # turn off the device
+    dev.off()
   }
   
-  
-  num_grps <- length(unique(informative_labels_df$grp)) + 1 # plus 1 for the 'non-vasc' group, essential unique sum of both columns grp, and grp_l
-  
-  # stop()
-  non_vasc_color <- unique(informative_labels_df_ordered %>% filter(grp != "Vascular cells") %>% .$vasc_grp_color)
-  vasc_color <- unique(informative_labels_df_ordered %>% filter(grp == "Vascular cells") %>% .$vasc_grp_color)
-  
-  # "topright"
-  # x = max(dend_height) + 0.25, y = 9.55
-  leg_temp <- bind_rows(informative_labels_df_ordered %>% distinct(grp_l, color, vasc_grp_color) %>% rename(grp = grp_l),
-                        informative_labels_df_ordered %>% distinct(grp_l2, color, vasc_grp_color) %>% rename(grp = grp_l2),
-                        informative_labels_df_ordered %>% distinct(grp, color, vasc_grp_color) ) %>%
-    distinct(grp, color, vasc_grp_color) %>%
-    mutate(grp = factor(grp, levels = c("HUVEC", "HAoSMC", "Cancer cells", "Other cells", "Vascular cells", "Non-vascular cells"))) %>%
-    arrange(grp)
-  leg_ <- bind_rows(leg_temp %>% slice(1:4) %>% dplyr::select(grp, color), 
-                    leg_temp %>% slice(5:8) %>% distinct(grp, vasc_grp_color) %>% rename(color = vasc_grp_color))
-  
-  leg_final <- c(as.character(leg_$grp), "Cluster assignment")
-  col_final <- c(leg_$color, border_color_set)
-  
-  # stop()
-  
-  xpos <- dend_height + 0.95
-  ypos <- ifelse(rotate_dendrogram, xpos*1.5, xpos + 7.65)
-  legend( x = xpos, y = ypos , title = "Legend", text.font = 3,
-          legend = leg_final,
-          col = col_final, 
-          lty = c(rep(1,length(leg_final)-1), rect_lty_set), # line style 
-          lwd = c(rep(8, length(leg_final)-1), 2.5), # line width
-          cex = 2.1, inset = c(INSET_MARGIN)+1.2,
-          yjust = 1.2) # legend size
-  dev.off()
-  
+  # plot everything
+  plot_eps()
+  plot_pdf()
+}
   # stop()
 }
 

@@ -3,11 +3,13 @@ library(ggrepel)
 library(readxl)
 library(ggsci)
 library(ggpubr)
+library(scales)
 
 library(xml2)
 library(XML)
 
 library(RColorBrewer)
+library(randomcoloR)
 
 # bioconductor pacakges that need to be installed manually
 # if (!requireNamespace("BiocManager", quietly = TRUE))
@@ -19,6 +21,12 @@ library(circlize)
 library(ComplexHeatmap)
 library(BiocParallel)
 
+# for seg fault issues.. https://issueexplorer.com/issue/wch/extrafont/89
+library(extrafont)
+# do this once
+# font_import()
+# loadfonts(device="postscript")
+fonts()
 
 
 # clustering
@@ -39,10 +47,13 @@ library(dendextend)
 library(GetoptLong)
 library(gridExtra)
 
+set.seed(59348)
 
 # if (!requireNamespace("BiocManager", quietly = TRUE))
 #   install.packages("BiocManager")
 # BiocManager::install(c("ComplexHeatmap", "BiocParallel", "cmapR", "circlize"))
+
+ht_opt$message = FALSE
 
 ## progress bar ##
 options(ggrepel.max.overlaps = Inf, error = recover)
@@ -120,8 +131,30 @@ dir_tbl <- tribble(~dataset_type, ~output_dir,
                    "GCP", gcp_base_output_dir,
                    "AVG", avg_base_output_dir)
 
-LOGFC_CUTOFF <- 0.5
 vascular_char_vec <- c("HUVEC", "HAoSMC")
+
+##########################################
+specific_data_directory <- "LINCS-data-LVL4" 
+# "LINCS-data-LVL3"
+args_fn_name <- "test_args.csv"
+lvl4_bool_data <- str_detect(string = specific_data_directory, 
+                              pattern = "LVL4") 
+
+if (lvl4_bool_data) {
+  FC_UPPER_BOUND <- 1.1
+  FC_LOWER_BOUND <- 0.9
+} else {
+  FC_UPPER_BOUND <- 3
+  FC_LOWER_BOUND <- 0.33
+}
+message("FC upper bound: @{FC_UPPER_BOUND}")
+message("FC lower bound: @{FC_LOWER_BOUND}")
+message(qq("\nRunning analysis on @{specific_data_directory} data\n"))
+if (lvl4_bool_data) {
+  message("LVL4 data has been row normalized to the PLATE MEDIAN")
+} else {
+  message("LVL3 data has ")
+}
 
 # p100_fn <- file.path("combined-datasets", "P100-All-Cell-Lines.gct")
 # gcp_fn <- file.path("combined-datasets", "GCP All Cell Lines.gct")
