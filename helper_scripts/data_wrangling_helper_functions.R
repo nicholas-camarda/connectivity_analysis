@@ -1,4 +1,19 @@
 
+#' @note extract genes and sites based on list of genes, string
+extract_sites <- function(analysis_dat, lst_of_genes) {
+
+  res <- analysis_dat %>% 
+    filter(dataset_type == "P100") %>%
+    unnest(cols = c(data)) %>%
+    dplyr::select(non_unique_pr_gene_symbol, mark) %>%
+    distinct() %>%
+    filter(non_unique_pr_gene_symbol %in% lst_of_genes) %>%
+    rename(pr_gene_symbol = non_unique_pr_gene_symbol); res
+  write_tsv(res, "~/Downloads/sites.tsv")
+  return(res)
+}
+
+
 #' @note write diffe objects to file
 #' @param ggplots_diffe list of faceted ggplots to plot
 #' @param ggplots_diffe_singles list of single ggplots to plot
@@ -6,11 +21,12 @@
 write_diffe_objs_to_file <- function(ggplots_diffe, ggplots_diffe_singles, names_tbl, lvl4_bool_data){
   
   if (lvl4_bool_data) {
-    width_ <- 14
+    width_ <- 8
     height_ <- 8
   } else {
-    width_ <- 16
-    height_ <- 16
+    # could change this if you wanted
+    width_ <- 14
+    height_ <- 8
   }
   walk2(
     as.list(ggplots_diffe),
@@ -78,14 +94,16 @@ find_duplicates <- function(tbl) {
 #' @param dtype_ the dataset type of the GCT, e.g. P100 or GCP
 #' @return a merged object that contains all P100 or GCP data
 read_and_summarize_data <- function(l, dtype_) {
+  # l <- my_data_lst[[1]][2:4,]; dtype_ = "P100"
   res_temp <- data.table::rbindlist(l$data, fill = TRUE, use.names = TRUE) %>% 
     as_tibble() %>%
     mutate(which_dat = dtype_) %>%
     mutate(cell_id = ifelse(cell_id == "Pericytes", "Pericyte", cell_id)) %>%
     mutate(pert_iname = tolower(pert_iname),
            det_normalization_group_vector = as.character(det_normalization_group_vector)) %>%
+    mutate(pert_iname = ifelse(pert_iname == "dmso", toupper(pert_iname), pert_iname)) %>%
     ## inner join to only do drugs that I pick!!
-    inner_join(drugs_moa_df, by = "pert_iname") %>%
+    left_join(drugs_moa_df, by = "pert_iname") %>%
     dplyr::rename( 
       row_id = id.x,
       column_id = id.y,
@@ -126,19 +144,52 @@ read_and_summarize_data <- function(l, dtype_) {
       rename(pr_gene_symbol = pr_gene_symbol_u)
     
     res <- res_temp2 %>%
-      dplyr::select(master_id, replicate_id,row_id, column_id, 
+      dplyr::select(master_id, replicate_id, row_id, column_id, 
                     value, pr_gene_symbol, mark, everything()) 
     
   }
+  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-summary.RData")
+  # load("debug/debug_dat/debug-summary.RData")
+  # stop()
   
-  g <- ggplot(res, aes(x=pr_gene_symbol, y=value)) +
-    geom_boxplot() +
-    theme_bw() +
-    theme(axis.text.x = element_text(angle=45, hjust=1, vjust=1)) +
-    ggtitle(dtype_)
-  plot_dir <- file.path(output_directory, "summary"); dir.create(plot_dir, recursive = T, showWarnings = F)
-  ggsave(g, filename = file.path(plot_dir, qq("@{dtype_}.pdf")), width = 12, height = 10 )
+  num_distinct_drugs <- res$pert_iname %>% unique() %>% length()
+  num_distinct_cells <- res$cell_id %>% unique() %>% length()
+  cmbd_drug_cell_n <- num_distinct_drugs*num_distinct_cells
   
+  message("Plotting summary data...")
+  g <- ggplot(res) +
+    geom_boxplot(aes(x=pr_gene_symbol, y=value)) + # 
+    # geom_point(aes(x=pr_gene_symbol, y=value, fill = cell_id), 
+    #            size = rel(0.01), shape = 21, 
+    #            position = position_jitterdodge()) +
+    theme_bw(base_size = 7) +
+    theme(axis.text.x = element_text(size = rel(1.5), angle=90, hjust=1, vjust=1)) +
+    ggtitle(dtype_) 
+  
+  plot_dir <- file.path(output_directory, "summary")
+  dir.create(plot_dir, recursive = T, showWarnings = F)
+  ggsave(g, filename = file.path(plot_dir, qq("@{dtype_}.pdf")),
+         width = 20, height = 10)
+  
+  # init_cell <- g + 
+  #   ggforce::facet_grid_paginate(~cell_id, nrow = 1, ncol = 3)
+  # n_pages_g_cell <- ggforce::n_pages(init_cell); n_pages_g_cell
+  # 
+  # pdf(file = "~/Downloads/test.pdf", width = 10, height = 5)
+  # for (p in 1:n_pages_g_cell) {
+  #   g_ <- g + ggforce::facet_grid_paginate(~cell_id, nrow = 1, ncol = 3, page = p)
+  #   print(g_)
+  # }
+  # dev.off()
+  # 
+  # g_pert <- g +
+  #   ggforce::facet_grid_paginate(cell_id~pert_iname, ncol = 3, page = cmbd_drug_cell_n/6)
+
+  # ggsave(g_cell, filename = file.path(plot_dir, qq("@{dtype_}-cell.pdf")), 
+  #        width = 10, height = 10)
+  # ggsave(g_pert, filename = file.path(plot_dir, qq("@{dtype_}-pert.pdf")), 
+  #        width = 20, height = 10)
+  # 
   return(res)
 }
 
@@ -276,7 +327,8 @@ create_my_drugs_df <- function(ref_dir = REFERENCES_DIRECTORY) {
   
   drugs_moa_df <- bind_rows(cancer_drug_moa_df, cv_drug_moa_df) %>%
     mutate(pert_iname = tolower(pert_iname)) %>%
-    distinct()
+    distinct() %>%
+    mutate(pert_iname = ifelse(pert_iname == "dmso", toupper(pert_iname), pert_iname))
   return(drugs_moa_df)
 }
 
@@ -322,7 +374,7 @@ read_and_merge_gcts <- function(parent_dir_fn,
     arrange(full_path_fn)
   
   data <- all_data_fns %>%
-    select(fn, full_path_fn) %>%
+    dplyr::select(fn, full_path_fn) %>%
     mutate(obj = map(full_path_fn, function(f) {
       res <- suppressMessages(parse_gctx(f))
       cat(".")
@@ -344,4 +396,51 @@ read_and_merge_gcts <- function(parent_dir_fn,
     x = data_lst
   ))
   return(merged_obj)
+}
+
+
+
+
+get_drug_and_cell_summary_data <- function(analysis_dat, output_dir, 
+                                           filter_vars_for_summary,
+                                           grouping_var_for_summary) {
+
+  final_res <- lapply(1:length(grouping_var_for_summary), FUN = function(i) {
+    res <- analysis_dat %>%
+      slice(i) %>%
+      mutate(summary_cells = map(data, function(d){
+      # d = analysis_dat$data[[1]]
+      drugs_to_plot_df <- d %>%
+        filter(!!sym(grouping_var_for_summary[i]) == filter_vars_for_summary[i])
+      
+      table(drugs_to_plot_df$cell_id, drugs_to_plot_df$pert_iname)
+      
+      drugs_to_plot <- unique(drugs_to_plot_df$pert_iname); drugs_to_plot
+      
+      to_plot_n <- d %>%
+        dplyr::select(cell_id, pert_iname) %>%
+        group_by(cell_id, pert_iname) %>% 
+        tally() %>%
+        group_by(cell_id) %>%
+        mutate(freq = n / sum(n)) %>% 
+        arrange(cell_id, desc(freq)) %>%
+        filter(pert_iname %in% drugs_to_plot); to_plot_n
+      
+      
+      gbar <- ggbarplot(to_plot_n, x = "cell_id", y = "n", 
+                fill = "pert_iname", facet.by = "pert_iname", ggtheme = theme_bw()) +
+        ggtitle("Drugs used in all cell lines, count") + 
+        theme(axis.text.x = element_text(angle = 90))
+      
+      return(gbar)
+
+    })) %>%
+    mutate(exclude_label = map_chr(exclude, .f = function(x) ifelse(is.na(x), "no_excl", x) )) %>%
+    mutate(output_fn = file.path(dirname(output_dir), "summary", 
+                                 str_c(str_c(dataset_type, filter_vars, exclude_label, "cells", sep = "-"),".pdf")))
+    return(res)
+  }) %>%
+    bind_rows()
+  
+  walk2(final_res$summary_cells, as.list(final_res$output_fn), .f = function(x, y) ggsave(plot = x, filename = y))
 }

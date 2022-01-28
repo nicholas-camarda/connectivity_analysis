@@ -3,13 +3,17 @@ library(ggrepel)
 library(readxl)
 library(ggsci)
 library(ggpubr)
+library(ggforce)
 library(scales)
+library(tidymodels)
 
 library(xml2)
 library(XML)
 
 library(RColorBrewer)
 library(randomcoloR)
+library(pals)
+library(colorspace)
 
 # bioconductor pacakges that need to be installed manually
 # if (!requireNamespace("BiocManager", quietly = TRUE))
@@ -47,13 +51,17 @@ library(dendextend)
 library(GetoptLong)
 library(gridExtra)
 
-set.seed(59348)
+set.seed(25)
 
 # if (!requireNamespace("BiocManager", quietly = TRUE))
 #   install.packages("BiocManager")
 # BiocManager::install(c("ComplexHeatmap", "BiocParallel", "cmapR", "circlize"))
 
-ht_opt$message = FALSE
+# specific_data_directory <- "vascular-data-LVL4"
+# args_fn_name <- "vascular_args.csv"
+specific_data_directory <- "All-LINCS-data-LVL4" 
+args_fn_name <- "all_args.csv"
+
 
 ## progress bar ##
 options(ggrepel.max.overlaps = Inf, error = recover)
@@ -85,7 +93,27 @@ if (winos == 1) {
     "OneDrive - Tufts", "phd", "ws", "proteomics"
   )
 }
-output_directory <- file.path(working_directory, "output")
+
+lvl4_bool_data <- str_detect(string = specific_data_directory, 
+                             pattern = "LVL4") 
+
+if (lvl4_bool_data) {
+  FC_UPPER_BOUND <- 1.1
+  FC_LOWER_BOUND <- 0.9
+} else {
+  FC_UPPER_BOUND <- 3
+  FC_LOWER_BOUND <- 0.33
+}
+message(qq("FC upper bound: @{FC_UPPER_BOUND}"))
+message(qq("FC lower bound: @{FC_LOWER_BOUND}"))
+message(qq("\nRunning analysis on @{specific_data_directory} data\n"))
+if (lvl4_bool_data) {
+  message("LVL4 data has been row normalized to the PLATE MEDIAN")
+} else {
+  message("LVL3 data has ")
+}
+
+output_directory <- file.path(working_directory, str_c("output", specific_data_directory, sep = "_"))
 data_directory <- file.path(working_directory, "data")
 
 setwd(working_directory)
@@ -131,31 +159,118 @@ dir_tbl <- tribble(~dataset_type, ~output_dir,
                    "GCP", gcp_base_output_dir,
                    "AVG", avg_base_output_dir)
 
-vascular_char_vec <- c("HUVEC", "HAoSMC")
+vascular_char_vec <- c("HUVEC", "HAoSMC", "Pericyte")
 
 ##########################################
-specific_data_directory <- "LINCS-data-LVL4" 
-# "LINCS-data-LVL3"
-args_fn_name <- "test_args.csv"
-lvl4_bool_data <- str_detect(string = specific_data_directory, 
-                              pattern = "LVL4") 
 
-if (lvl4_bool_data) {
-  FC_UPPER_BOUND <- 1.1
-  FC_LOWER_BOUND <- 0.9
-} else {
-  FC_UPPER_BOUND <- 3
-  FC_LOWER_BOUND <- 0.33
-}
-message("FC upper bound: @{FC_UPPER_BOUND}")
-message("FC lower bound: @{FC_LOWER_BOUND}")
-message(qq("\nRunning analysis on @{specific_data_directory} data\n"))
-if (lvl4_bool_data) {
-  message("LVL4 data has been row normalized to the PLATE MEDIAN")
-} else {
-  message("LVL3 data has ")
-}
 
 # p100_fn <- file.path("combined-datasets", "P100-All-Cell-Lines.gct")
 # gcp_fn <- file.path("combined-datasets", "GCP All Cell Lines.gct")
 
+cat("\nReading and merging data...")
+#' @note cmapR help functions https://rdrr.io/github/cmap/cmapR/man/
+#' the values in this data are Z-scores!!!
+
+#' # test_args.csv
+analysis_fn <- file.path(data_directory, args_fn_name)
+analysis_dat_temp <- read_csv(analysis_fn,
+                              comment = "#",
+                              show_col_types = FALSE
+) %>%
+  mutate_all(str_trim) %>%
+  mutate(
+    filter_vars = map(filter_vars, collect_args),
+    exclude = map(exclude, collect_args)
+  ) %>%
+  left_join(dir_tbl, by = "dataset_type")
+
+stopifnot(nrow(analysis_dat_temp) >= 1)
+
+my_data <- tibble(fns = dir(file.path(datasets_directory, specific_data_directory),
+                            full.names = T, recursive = T
+)) %>%
+  distinct() %>%
+  mutate(gct = map(
+    .x = fns,
+    .f = parse_gctx
+  )) %>%
+  mutate(dataset_type = str_extract(string = fns, pattern = "GCP|P100")) %>%
+  arrange(desc(dataset_type)) %>%
+  # mutate(
+  #   ranked_gct = map(.x = gct, .f = cmapR::rank_gct, dim = "col"),
+  #   mat = map(.x = gct, .f = cmapR::mat),
+  #   ranked_mat = map(.x = ranked_gct, .f = cmapR::mat)
+  # ) %>%
+  mutate(data = map(.x = gct, .f = melt_gct)) %>%
+  inner_join(analysis_dat_temp, by = "dataset_type")
+
+drugs_moa_df <- create_my_drugs_df(ref_dir = references_directory)
+
+# read in shared plated IDs from Srila's data
+# run debug-dataset.R first!
+debug_fn <- file.path(working_directory, "debug/shared_plate_ids.tsv")
+shared_plate_id_df <- read_tsv(debug_fn,show_col_types = FALSE) %>%
+  arrange(shared_plate_ids)
+shared_plate_ids <- shared_plate_id_df$shared_plate_ids
+
+
+# organize what was read in
+my_data_lst <- my_data %>%
+  split(.$dataset_type)
+dataset_type_col <- names(my_data_lst)
+
+message("Reading and summarizing data...")
+my_data_obj_final <- tibble(
+  dataset_type = dataset_type_col,
+  # combine the data rows into a single dataset, and nest it
+  data = map2(my_data_lst, dataset_type,
+              .f = read_and_summarize_data
+  )
+)
+
+# grab drugs from BOTH P100 and GCP
+my_temp_obj <- bind_rows(my_data_obj_final$data) %>%
+  ungroup()
+
+# drugs_to_plot_df <- my_temp_obj %>%
+#   filter(!is.na(value)) %>%
+#   dplyr::select(cell_id, pert_iname, value) %>%
+#   pivot_wider(id_cols = pert_iname, names_from = cell_id, 
+#               values_from = value, 
+#               values_fn = median) %>%
+#   na.omit() 
+# my_perts <- drugs_to_plot_df$pert_iname
+HUVEC_HAoSMC_perts <- my_temp_obj %>%
+  filter(cell_id %in% vascular_char_vec) %>%
+  ungroup() %>%
+  dplyr::select(pert_iname) %>%
+  .$pert_iname %>%
+  unique()
+
+other_perts <- my_temp_obj %>%
+  ungroup() %>%
+  filter(!(cell_id %in% vascular_char_vec)) %>%
+  distinct(pert_iname) %>%
+  .$pert_iname
+
+my_perts <- intersect(HUVEC_HAoSMC_perts, other_perts); my_perts
+
+
+all_drugs_mapping <- my_temp_obj %>%
+  distinct(pert_iname) %>%
+  filter(pert_iname %in% my_perts)
+
+
+# bind final object
+analysis_dat <- inner_join(
+  analysis_dat_temp,
+  my_data_obj_final, # my_data_obj_final
+  by = "dataset_type"
+)
+
+grouping_var_for_summary <- unlist(analysis_dat_temp$grouping_var)
+filter_vars_for_summary <- unlist(analysis_dat_temp$filter_vars)
+get_drug_and_cell_summary_data(analysis_dat = analysis_dat, 
+                               output_dir = output_dir,
+                               filter_vars_for_summary, 
+                               grouping_var_for_summary)

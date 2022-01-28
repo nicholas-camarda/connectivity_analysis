@@ -64,6 +64,7 @@ run_corr_lst <- function(lst, tie_method = "average") {
 #' @return list obj containing matrix / long tbl forms of correlation result
 run_corr <- function(x, tie_method = "average") {
   # x <- full_splt_lst[[1]]
+  
   x_ungrouped <- x %>%
     ungroup()
   #
@@ -279,10 +280,10 @@ run_clust_lst <- function(lst, use_parallel = FALSE) {
 #' @param mat connectivity matrix
 run_clust <- function(mat, use_parallel = FALSE) {
   # mat <- sample_conn_obj$conn_lst[[1]]$conn_median_mat
-  mat <- force_natural(mat)
+  mat <- as.matrix(force_natural(mat))
   
   # stop("debug")
-  # print(Heatmap(mat))
+  print(Heatmap(mat))
   
   pv_obj <- compute_boot_pvclust(
     x = mat,
@@ -314,19 +315,24 @@ compute_boot_pvclust <- function(x, parallel_flag = FALSE, n_boot = 1000) {
   if (!(nrow(x) > 2)) {
     message("Not enough data to perform clustering analysis.")
     return(NULL)
+  } else if (nrow(x) == 3) {
+    message("Distance matrix doesn't have enough comparisons. Using Hclust, euclidean, average")
+    x <- dist(x)
+    res <- list(hclust = hclust(x, method = "average"))
+  } else {
+    message("Using pvclust..")
+    # hclust(x)
+    # stop("debug")
+    res <- pvclust(x,
+                   method.dist = "correlation",
+                   method.hclust = "average",
+                   # weight = TRUE,
+                   quiet = FALSE,
+                   nboot = n_boot,
+                   iseed = 2334,
+                   parallel = parallel_flag
+    )
   }
-  
-  # stop("debug")
-  res <- pvclust(x,
-                 method.dist = "correlation",
-                 method.hclust = "average",
-                 # weight = TRUE,
-                 quiet = TRUE,
-                 nboot = n_boot,
-                 iseed = 2334,
-                 parallel = parallel_flag
-  )
-  
   # db <- fpc::dbscan(x, eps = 0.35, MinPts = 5)
   # plot(db, x, main = "DBSCAN", frame = FALSE)
   # dbscan::kNNdistplot(x, k =  5)
@@ -649,6 +655,10 @@ run_diffe <- function(dat, cob, dname) {
 plot_diffe_results <- function(args){
   # DEBUG: diffe_final_res <- args$diffe_lst[[1]][[1]]; signif_df <- args$diffe_lst[[1]][[2]]
   
+  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-diffe.RData")
+  # load("debug/debug_dat/debug-diffe.RData")
+  # stop()
+  
   dname <- force_natural(args$dirname_)
   diffe_final_res <- args$diffe_lst[[1]]
   signif_df <- args$diffe_lst[[2]] 
@@ -662,27 +672,31 @@ plot_diffe_results <- function(args){
     dname_title <- dname
   }
   
+  sig_up_df <- signif_df %>% 
+    filter(neg_log10_p_val_bh >= 1 & 
+             (fc >= FC_UPPER_BOUND))
+  sig_down_df <- signif_df %>% 
+    filter(neg_log10_p_val_bh >= 1 & 
+             (fc <= FC_LOWER_BOUND))
+  
+  to_plot_signif_df <- bind_rows(sig_up_df,sig_down_df) %>%
+    mutate(label_ = str_split(label_, "_", simplify = TRUE)[,1])
+  
   # pretty breaks!! pretty_breaks
   # https://stackoverflow.com/questions/11335836/increase-number-of-axis-ticks
-  plot_diffe_all <- function(diffe_final_res, signif_df, which_dat, dname_title) {
+  plot_diffe_all <- function(diffe_final_res, to_plot_signif_df, which_dat, dname_title) {
     
     # stop()
-    min_x_lim <- min(signif_df$fc, na.rm = T) - 0.1
-    max_x_lim <- max(signif_df$fc, na.rm = T) + 0.1
+    min_x_lim <- min(to_plot_signif_df$fc, na.rm = T) - 0.1
+    max_x_lim <- max(to_plot_signif_df$fc, na.rm = T) + 0.1
     
-    filt_signif <- signif_df %>% 
+    filt_signif <- to_plot_signif_df %>% 
       filter(neg_log10_p_val_bh < Inf & neg_log10_p_val_bh > -Inf) %>% 
       .$neg_log10_p_val_bh
     max_y_lim <- max(filt_signif, na.rm = T)
     
-    sig_up_df <- signif_df %>% 
-      filter(neg_log10_p_val_bh >= 1 & 
-               (fc >= FC_UPPER_BOUND))
-    sig_down_df <- signif_df %>% 
-      filter(neg_log10_p_val_bh >= 1 & 
-               (fc <= FC_LOWER_BOUND))
-    
-    rel_size_label <- rel(4)
+    rel_size_label <- rel(4.5)
+    rel_segment_size <- rel(1)
     rel_size_point <- rel(3)
     
     diffe_g <- ggplot(diffe_final_res) +
@@ -690,7 +704,13 @@ plot_diffe_results <- function(args){
                  size = rel_size_point, shape = 21, color = "black", # filled circle with outline
       ) +
       # make the scale fit the signif bar
-      geom_point(data = signif_df, mapping = aes(x = fc, y = neg_log10_p_val_bh, fill = fc), 
+      # signif_df %>% 
+      # filter(neg_log10_p_val_bh >= 1 & 
+      #          (fc >= FC_UPPER_BOUND),
+      #        neg_log10_p_val_bh >= 1 & 
+      #          (fc <= FC_UPPER_BOUND)), 
+      geom_point(data = to_plot_signif_df,
+                 mapping = aes(x = fc, y = neg_log10_p_val_bh, fill = fc), 
                  size = rel_size_point, shape = 21, color = "black") +
       geom_vline(
         xintercept = as.numeric(c(FC_LOWER_BOUND, FC_UPPER_BOUND)),
@@ -700,53 +720,69 @@ plot_diffe_results <- function(args){
         yintercept = as.numeric(-log10(0.1)),
         col = "orange", linetype = 6,
       ) +
-      geom_label_repel(signif_df %>% 
+      geom_label_repel(to_plot_signif_df %>% 
+                         na.omit() %>%
                          filter(neg_log10_p_val_bh >= 1 & 
                                   (fc >= FC_UPPER_BOUND)),
                        mapping = aes(x = fc, y = neg_log10_p_val_bh, 
                                      label = label_),
+                       seed = 42,
+                       alpha = 0.7,
                        direction = "both", # direction to adjust labels, x, y, both
                        verbose = TRUE,
                        size = rel_size_label,
-                       max.iter = 1e8,
+                       max.iter = 1e9,
+                       segment.size = rel_segment_size,
                        # max.time = 10,
                        # segment.shape = -1,
                        segment.curvature = -0.6,
                        segment.square = TRUE,
                        segment.color = 'red',
-                       box.padding = 0.5,
+                       box.padding = 0.2,
                        min.segment.length = 0,
-                       point.padding = 0.6,
+                       point.padding = 0.8,
                        force_pull = 0.5,
                        force = 2,
-                       nudge_y = ifelse(sig_up_df$neg_log10_p_val_bh >= 3, -0.5, -0.2),
-                       nudge_x = 0.05,
+                       nudge_x = 0.01,
+                       nudge_y = 0.01,
+                       # nudge_y = assignments_up$nudge_y,
+                       # nudge_y = ifelse(sig_up_df$neg_log10_p_val_bh >= 3, -0.5, -0.2),
+                       # nudge_x = assignments_up$nudge_x,
+                       xlim = c(1, max_x_lim),
                        ylim = c(0, max_y_lim+1),
                        arrow = arrow(length = unit(0.0075, "npc"))) +
       
-      geom_label_repel(signif_df %>% filter(neg_log10_p_val_bh >= 1 & 
-                                              (fc <= FC_LOWER_BOUND)),
+      geom_label_repel(to_plot_signif_df %>% na.omit() %>%
+                         filter(neg_log10_p_val_bh >= 1 & 
+                                  (fc <= FC_LOWER_BOUND)),
                        mapping = aes(x = fc, y = neg_log10_p_val_bh,
                                      label = label_),
+                       seed = 42,
+                       alpha = 0.7,
                        direction = "both", # direction to adjust labels, x, y, both
                        verbose = TRUE,
                        size = rel_size_label,
-                       max.iter = 1e8,
-                       # max.time = 10, 
+                       max.iter = 1e9,
+                       # max.time = 10,
                        # segment.shape = -1,
+                       segment.size = rel_segment_size,
                        segment.curvature = -0.6,
                        segment.square = TRUE,
                        segment.color = 'blue',
-                       box.padding = 0.5,
+                       box.padding = 0.2,
                        min.segment.length = 0,
-                       point.padding = 0.6,
+                       point.padding = 0.8,
                        force_pull = 0.5,
                        force = 2,
-                       # nudge_y = ifelse(sig_down_df$neg_log10_p_val_bh >= 3, -0.5, -0.2),
-                       nudge_x = -0.05,
+                       nudge_x = -0.01,
+                       nudge_y = 0.01,
+                       # nudge_y = assignments_down$nudge_y,
+                       # nudge_x = assignments_down$nudge_x,
+                       xlim = c(min_x_lim-0.25, 1),
                        ylim = c(0, max_y_lim+1),
                        arrow = arrow(length = unit(0.0075, "npc"))) +
-      scale_x_continuous(limits = c(min_x_lim-10, max_x_lim),
+      
+      scale_x_continuous(limits = c(min_x_lim-0.25, max_x_lim),
                          breaks = scales::pretty_breaks(n = 10)) +
       scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
       # increase the space on the y axis so that the labels don't get clipped
@@ -755,12 +791,12 @@ plot_diffe_results <- function(args){
                            na.value = NA, space = "Lab",
                            name = "Fold Change") +
       theme_bw(base_size = 7) +
-      theme(aspect.ratio = 0.75,
+      theme(aspect.ratio = 1, # this is hard to pick
             legend.title = element_text(size = rel(1.75)),
             legend.text = element_text(size = rel(1.5)), 
             strip.text = element_text(size = rel(2)),
-            plot.title = element_text(hjust = 0.5, size = rel(4), face = "bold"),
-            plot.subtitle = element_text(hjust = 0.5, size = rel(3), face = "bold"),
+            plot.title = element_text(hjust = 0.5, size = rel(3), face = "bold"),
+            plot.subtitle = element_text(hjust = 0.5, size = rel(2.5), face = "bold"),
             axis.title = element_text(size = rel(2.75)),
             axis.text.y = element_text(size = rel(2.5), angle = 45),
             axis.text.x = element_text(size = rel(2.5), angle = 45,  vjust = 0.5)
@@ -776,29 +812,36 @@ plot_diffe_results <- function(args){
     return(diffe_g)
   }
   
-  diffe_g <- plot_diffe_all(diffe_final_res, signif_df, which_dat, dname_title) + 
+  diffe_g <- plot_diffe_all(diffe_final_res, to_plot_signif_df, which_dat, dname_title) + 
     facet_grid(~base_clust_comp_name, scales = "free"); diffe_g
   
-  # for just vascular cells
+  
+  # for plotting just vascular cells later on
   new_main <- diffe_final_res %>%
     mutate(vascular_str_name_idx = str_locate(base_clust_comp_name, pattern = "HUVEC|HAoSMC"),
            keep_ = ifelse(!is.na(vascular_str_name_idx), T, F)) %>%
     filter(keep_)
-  new_sig <- signif_df %>%
+  new_sig <- to_plot_signif_df %>%
     mutate(vascular_str_name_idx = str_locate(base_clust_comp_name, pattern = "HUVEC|HAoSMC"),
            keep_ = ifelse(!is.na(vascular_str_name_idx), T, F)) %>%
     filter(keep_)
-  
   groups <- unique(new_main$base_clust_comp_name)
   
+  # stop()
   diffe_g_vasc <- lapply(groups, FUN = function(g) {
     ndf <- filter(new_main, base_clust_comp_name == g)
     nns <- filter(new_sig, base_clust_comp_name == g)
-    res <- plot_diffe_all(ndf, nns, which_dat, dname_title) + 
-      facet_grid(~base_clust_comp_name)
+    res <- plot_diffe_all(diffe_final_res = ndf, to_plot_signif_df = nns, 
+                          which_dat = which_dat, dname_title = dname_title) 
     return(res)
   }); diffe_g_vasc
-  names(diffe_g_vasc) <- c(dname)
+  
+  group_name <- map_chr(groups, .f = function(g) {
+    r <- str_extract_all(g, pattern = "HAoSMC|HUVEC", simplify = TRUE)
+    return(str_c(r, collapse = ","))
+  })
+  # group_name <- ifelse(group_name == "HAoSMC,HUVEC", "All", group_name)
+  names(diffe_g_vasc) <- str_c(dname, "-", group_name)
   
   init_lst <- list(diffe_g) %>%
     setNames("diffe_full_g")

@@ -1,95 +1,6 @@
 # source the init.R file firstso
 source(file.path("scripts", "init.R"))
 
-cat("\nReading and merging data...")
-#' @note cmapR help functions https://rdrr.io/github/cmap/cmapR/man/
-#' the values in this data are Z-scores!!!
-
-#' # test_args.csv
-analysis_fn <- file.path(data_directory, args_fn_name)
-analysis_dat_temp <- read_csv(analysis_fn,
-                              comment = "#",
-                              show_col_types = FALSE
-) %>%
-  mutate_all(str_trim) %>%
-  mutate(
-    filter_vars = map(filter_vars, collect_args),
-    exclude = map(exclude, collect_args)
-  ) %>%
-  left_join(dir_tbl, by = "dataset_type")
-
-my_data <- tibble(fns = dir(file.path(datasets_directory, specific_data_directory),
-                            full.names = T, recursive = T
-)) %>%
-  distinct() %>%
-  mutate(gct = map(
-    .x = fns,
-    .f = parse_gctx
-  )) %>%
-  mutate(dataset_type = str_extract(string = fns, pattern = "GCP|P100")) %>%
-  arrange(desc(dataset_type)) %>%
-  # mutate(
-  #   ranked_gct = map(.x = gct, .f = cmapR::rank_gct, dim = "col"),
-  #   mat = map(.x = gct, .f = cmapR::mat),
-  #   ranked_mat = map(.x = ranked_gct, .f = cmapR::mat)
-  # ) %>%
-  mutate(data = map(.x = gct, .f = melt_gct)) %>%
-  inner_join(analysis_dat_temp, by = "dataset_type")
-
-drugs_moa_df <- create_my_drugs_df(ref_dir = references_directory)
-
-# read in shared plated IDs from Srila's data
-# run debug-dataset.R first!
-shared_plate_id_df <- read_tsv(file.path(working_directory, "debug/shared_plate_ids.tsv"),
-                               show_col_types = FALSE
-) %>%
-  arrange(shared_plate_ids)
-shared_plate_ids <- shared_plate_id_df$shared_plate_ids
-
-
-# organize what was read in
-my_data_lst <- my_data %>%
-  split(.$dataset_type)
-dataset_type_col <- names(my_data_lst)
-
-message("Reading and summarizing data...")
-my_data_obj_final <- tibble(
-  dataset_type = dataset_type_col,
-  # combine the data rows into a single dataset, and nest it
-  data = map2(my_data_lst, dataset_type,
-              .f = read_and_summarize_data
-  )
-)
-
-# grab drugs from BOTH P100 and GCP
-my_temp_obj <- bind_rows(my_data_obj_final$data) %>%
-  ungroup()
-
-HUVEC_HAoSMC_perts <- my_temp_obj %>%
-  filter(cell_id %in% vascular_char_vec) %>%
-  ungroup() %>%
-  dplyr::select(pert_iname) %>%
-  .$pert_iname %>%
-  unique()
-other_perts <- my_temp_obj %>%
-  ungroup() %>%
-  filter(!(cell_id %in% vascular_char_vec)) %>%
-  distinct(pert_iname) %>%
-  .$pert_iname
-my_perts <- intersect(HUVEC_HAoSMC_perts, other_perts)
-
-all_drugs_mapping <- my_temp_obj %>%
-  distinct(pert_iname) %>%
-  filter(pert_iname %in% my_perts)
-
-
-# bind final object
-analysis_dat <- inner_join(
-  analysis_dat_temp,
-  my_data_obj_final, # my_data_obj_final
-  by = "dataset_type"
-)
-
 # analysis apply function
 analysis_res <- apply(analysis_dat, 1, function(args) {
   # DEBUG: args = analysis_dat[1,];
@@ -110,21 +21,28 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   # this is convenient to filter the drugs out here...
   # but probably not the most intelligent design
   # need to filter out by group of analysis, e.g. per kinase inhibitor, per epigenetics, etc
-  HUVEC_HAoSMC_perts <- my_obj %>%
+  # drugs_to_plot_df <- my_obj %>%
+  #   filter(!is.na(value)) %>%
+  #   dplyr::select(cell_id, pert_iname, value) %>%
+  #   pivot_wider(id_cols = pert_iname, names_from = cell_id, 
+  #               values_from = value, 
+  #               values_fn = median) %>%
+  #   na.omit() 
+  # my_perts <- drugs_to_plot_df$pert_iname
+   HUVEC_HAoSMC_perts <- my_obj %>%
     filter(cell_id %in% vascular_char_vec) %>%
     ungroup() %>%
     dplyr::select(pert_iname) %>%
     .$pert_iname %>%
     unique()
-  
+
   other_perts <- my_obj %>%
     ungroup() %>%
     filter(!(cell_id %in% vascular_char_vec)) %>%
     distinct(pert_iname) %>%
     .$pert_iname
   
-  my_perts <- intersect(HUVEC_HAoSMC_perts, other_perts)
-  
+  my_perts <- intersect(HUVEC_HAoSMC_perts, other_perts); my_perts
   
   sub_obj_temp <- my_obj %>%
     # non-standard evaluation to find column for group
@@ -147,7 +65,6 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
           return(x)
         }
       }
-      
     )); dir_name_df
   
   sub_obj <- sub_obj_temp %>%
@@ -156,8 +73,6 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     dplyr::select(-!!grouping_var) %>%
     rename(!!grouping_var := new_filter_var) %>%
     suppressMessages()
-  
-  get_summary_stats
   
   full_splt_lst <- split(sub_obj, f = sub_obj[[sym(grouping_var)]])
   stopifnot(length(full_splt_lst) == length(filter_vars))
@@ -177,7 +92,6 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
       )[, 1]
     )
   output_dirs_lst
-  
   
   # check output dir for results
   # stop()
@@ -264,6 +178,10 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
                                       grouping_var = grouping_var)
   }
   
+  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-diffe.RData")
+  # load("debug/debug_dat/debug-diffe.RData")
+  # stop()
+  
   my_heatmap_and_dendro_obj_temp <- res_paths_tbl %>%
     # pivot_wider(
     #   id_cols = !!grouping_var,
@@ -283,7 +201,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
       dir_path = file.path(base_path, "plots", "prettydendros"),
       path = file.path(dir_path, str_c(dirname_, ".eps"))
     ) %>%
-    distinct(path, .keep_all = TRUE) 
+    distinct(path, .keep_all = TRUE)
   
   # create output directory
   walk(unique(my_dendro_obj$dir_path), dir.create, showWarnings = F, recursive = T)
@@ -389,6 +307,37 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   # stop()
   # plot the complete faceted diffe plots
   write_diffe_objs_to_file(ggplots_diffe, ggplots_diffe_singles, names_tbl, lvl4_bool_data)
+  
+  # extract the diffe result and retrieve drugs that were used
+  
+  # str(heatmap_res, max.level = 2)
+  temp <- purrr::transpose(heatmap_res) %>% flatten()
+  if (length(temp) != 5) {
+    # another transposition if it's nested
+    temp <- purrr::transpose(temp)
+  }
+  df_drugs_used <- bind_rows(lapply(temp$col_annot, 
+                                    FUN = function(l) l)) %>% 
+    distinct(pert_iname, pert_class) %>%
+    mutate(pert_class = str_split(pert_class, "_excl_", simplify = TRUE)[,1])
+
+  drug_dose_info_df <- my_obj %>% 
+    ungroup() %>%
+    distinct(cell_id, pert_iname, pert_class, pert_dose, pert_dose_unit, det_plate) %>% 
+    arrange(pert_iname, cell_id) %>%
+    filter(pert_iname %in% df_drugs_used$pert_iname)
+  drug_dose_info_df_distinct <- drug_dose_info_df %>% 
+    distinct(pert_iname)
+  
+  dirname_char <- unique(dir_name_df$new_filter_var)
+  drug_info_dir <- file.path(output_directory, dataset_type, "dataset_info")
+  drug_dose_info_fn_name <- file.path(drug_info_dir, str_c(dirname_char, ".tsv"))
+  drug_dose_info_fn_name_distinct <- file.path(drug_info_dir, str_c(dirname_char, "_distinct.tsv"))
+  dir.create(drug_info_dir, showWarnings = F, recursive = T)
+  
+  write_tsv(drug_dose_info_df, file = drug_dose_info_fn_name)
+  write_tsv(drug_dose_info_df_distinct, file = drug_dose_info_fn_name_distinct)
+  
   
   message("Done with that batch!\n")
 })

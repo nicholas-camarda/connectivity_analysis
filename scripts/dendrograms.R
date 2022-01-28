@@ -7,12 +7,15 @@
 create_informative_labels <- function(){
   # num_grps_cells = 3
   #' colors: 
-   # https://www.w3schools.com/colors/colors_palettes.asp
-  colors <- c("#ff677f", "#ffe766", "#225ea8", "#41b6c4", "#9ba2ff", "#ffb781")
-  cell_colors <- c("#ffb781", "#9ba2ff", "#c1946a", "#618685", "#b9b0b0", "#80ced6", "#f4e1d2", "#82b74b", "#50394c")
+  # https://www.w3schools.com/colors/colors_palettes.asp
+  # for the bars
+  colors <- c("#ff677f", "#ffe766", "#225ea8", "#41b6c4", "#9ba2ff", "#ffb781", "#808080")
+  names(colors) <- c("light red", "yellow", "dark blue", "light blue", "light purple", "orange", "gray")
+  
+  # for each cell
+  cell_colors <- c("#ffb781", "#9ba2ff", "#c1946a", "#618685", "#b9b0b0", "#6b5b95", "#f4e1d2", "#82b74b", "#50394c", "#808080")
   # names(colors) <- c("blue", "yellow", "black", "orange")
   # "#a1dab4", green
-  names(colors) <- c("light red", "yellow", "dark blue", "light blue", "light purple", "orange")
   # yellow = vascular
   # purple = huvecs
   # orange = haosmcs
@@ -20,25 +23,26 @@ create_informative_labels <- function(){
   # dark blue = other
   # light blue = cancer
   
-  vascular_char_vec <- c("HUVEC","HAoSMC")
+  vascular_char_vec <- c("HUVEC","HAoSMC", "Pericyte")
   other_char_vec <- c("MCF10A", "NPC")
   
-  informative_labels_df <- tibble(lbs = c("HAoSMC", "HUVEC", "MCF10A", "PC3", "YAPC", "A375", "A549", "MCF7", "NPC"),
+  informative_labels_df <- tibble(lbs = c("HAoSMC", "HUVEC", "MCF10A", "PC3", "YAPC", "A375", "A549", "MCF7", "NPC", "Pericyte"),
                                   new_lbs = c("HAoSMC", "HUVEC", "MCF10A  \n(fibrocystic)", "PC3    \n(prostate)",
-                                              "YAPC    \n(pancreas)", "A375\n(skin)", "A549\n(lung)", "MCF7\n(breast)", "NPC  \n(neural)")) %>%
+                                              "YAPC    \n(pancreas)", "A375\n(skin)", "A549\n(lung)", "MCF7\n(breast)", "NPC  \n(neural)", "Pericyte")) %>%
     mutate(grp = ifelse(lbs %in% vascular_char_vec, "Vascular cells", 
                         ifelse(lbs %in% other_char_vec, "Other cells", "Cancer cells")),
            grp = factor(grp, levels = c("Vascular cells", "Cancer cells", "Other cells"))) %>%
     mutate(grp_l = ifelse(lbs %in% vascular_char_vec, "Vascular cells", "Non-vascular cells"),
            grp_l = factor(grp_l, levels = c("Vascular cells", "Non-vascular cells"))) %>%
     mutate(grp_l2 = ifelse(lbs == "HUVEC", "HUVEC",
-                           ifelse(lbs == "HAoSMC", "HAoSMC", "Non-vascular cells")),
-           grp_l2 = factor(grp_l2, levels = c("HAoSMC", "HUVEC", "Non-vascular cells"))) %>%
+                           ifelse(lbs == "HAoSMC", "HAoSMC", 
+                                  ifelse(lbs == "Pericyte", "Pericyte", "Non-vascular cells"))),
+           grp_l2 = factor(grp_l2, levels = c("HAoSMC", "HUVEC", "Pericyte", "Non-vascular cells"))) %>%
     mutate(color = ifelse(lbs == vascular_char_vec[1], colors[5], # check huvec
                           ifelse(lbs == vascular_char_vec[2], colors[6], # check haosmc
                                  ifelse(lbs %in% other_char_vec, colors[3], colors[4]))), # check other vs cancer
            vasc_grp_color = ifelse(lbs %in% vascular_char_vec, colors[2], colors[1])) %>%
-    mutate(cell_individual_color =cell_colors)
+    mutate(cell_individual_color = cell_colors)
   
   grp_labels_ordered_for_legend_df <- informative_labels_df %>% 
     distinct(grp_l, vasc_grp_color) %>% 
@@ -57,7 +61,9 @@ create_informative_labels <- function(){
 #' @param INSET_MARGIN percent of plotsize in x direction to adjust legend, usually negative
 plot_pretty_dendrogram <- function(args, 
                                    INSET_MARGIN = -0.06, 
-                                   rotate_dendrogram = FALSE) {
+                                   rotate_dendrogram = FALSE,
+                                   plot_legend = FALSE,
+                                   plot_color_bar = FALSE) {
   # args <- my_clust_obj[2,]
   
   # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-p100-perti-dendro.RData")
@@ -101,7 +107,7 @@ plot_pretty_dendrogram <- function(args,
   # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-p100-perti-dendro.RData")
   # load("debug/debug_dat/debug-p100-perti-dendro.RData")
   # stop()
-{
+  
   if ( !any(vasc_dend_pos %in% last_2_positions)  ) { #& co_clust
     message("\n Re-organizing labels to 'right-justify' vascular cells") 
     # ensure vasc is last
@@ -109,7 +115,7 @@ plot_pretty_dendrogram <- function(args,
     # switch the names and positions of the last positions with 
     names_involved <-  c(names_vasc_dend_pos,names_last_2_position)
     to_join_original_df <- filter(vasc_top_labels_df, !(lbs %in% names_involved)) 
-
+    
     vasc_top_labels_df <- tibble(lbs = c(names_vasc_dend_pos,names_last_2_position), 
                                  dend_order = c(last_2_positions,vasc_dend_pos)) %>% # this could be renamed to 'new_dend_labels' t
       left_join(vasc_top_labels_df %>% dplyr::select(-dend_order),by="lbs") %>% # give their lbs their properties back
@@ -133,7 +139,7 @@ plot_pretty_dendrogram <- function(args,
   #   .$new_lbs
   
   # normal labels and colors, according to dendro
-  colors_char_vec <- as.character(informative_labels_df_ordered$color)
+  colors_char_vec <- as.character(informative_labels_df_ordered$cell_individual_color)
   labels_char_vec <- as.character(informative_labels_df_ordered$new_lbs)
   
   # rotated labels and colors to have vasc on top
@@ -164,7 +170,7 @@ plot_pretty_dendrogram <- function(args,
     branch_lwd_set <- 15
     cell_dend_color_leave_edges <- hclust_dend %>% 
       assign_values_to_leaves_edgePar(hclust_dend, 
-                                      value = informative_labels_df_ordered$color, 
+                                      value = informative_labels_df_ordered$cell_individual_color, 
                                       edgePar = "col") %>% # this function replaces colLab 
       set("branches_lwd", branch_lwd_set) %>%
       set("labels", informative_labels_df_ordered$new_lbs) %>%
@@ -184,7 +190,7 @@ plot_pretty_dendrogram <- function(args,
     rect_lwd_set <- branch_lwd_set / 1.5
     plot(cell_dend_color_leave_edges, 
          main = plot_title, 
-         bty='L', xlim = c(2.5,0), # to help standardize x-axis for comparison
+         bty='L', xlim = c(2.0,0), # to help standardize x-axis for comparison
          cex.main = 2.5, # main title text size
          cex.axis = 1.75, # axis text size
          horiz = T, # horizontal
@@ -199,7 +205,7 @@ plot_pretty_dendrogram <- function(args,
                       k = max_n_clusts, # draw boxes around clusters # lower_rect = par("usr")[2L]*-0.25, # draw from right to left
                       border = border_color_set, horiz = T, # horizontal plot
                       lwd = rect_lwd_set, lty = rect_lty_set,
-                      lower_rect = dend_height*-0.1718011 - 0.05,
+                      lower_rect = dend_height*-0.1718011 - 0.08,
                       # lower_rect = dend_height*-0.156641 + pdf_height*0.000286 - 0.020006,
                       xpd = NA)  # take the bottom border and increse slightly
       
@@ -208,73 +214,77 @@ plot_pretty_dendrogram <- function(args,
                       k = max_n_clusts, # draw boxes around clusters # lower_rect = par("usr")[2L]*-0.25, # draw from right to left
                       border = border_color_set, horiz = T, # horizontal plot
                       lwd = rect_lwd_set, lty = rect_lty_set,
-                      lower_rect = dend_height*-0.1718011 - 0.05,
+                      lower_rect = dend_height*-0.1718011 - 0.08,
                       # lower_rect = dend_height*-0.156641 + pdf_height*0.000286 - 0.020006,
                       xpd = NA)  # take the bottom border and increse slightly
+      
     }
     
-    # draw colored bars below dend
-    if (rotate_dendrogram){
-      message("rotating color bar")
-      new_color_order <- tibble(new_lbs = labels(cell_dend_color_leave_edges), 
-                                order = 1:length(labels(cell_dend_color_leave_edges)))
-      color_bars <- suppressMessages(left_join(vasc_top_labels_df_rotated_order %>% 
-                                                 dplyr::select(new_lbs, color, vasc_grp_color), new_color_order ) %>%
-                                       arrange(order) %>% 
-                                       dplyr::select(vasc_grp_color, color))
-      colored_bars(dend = cell_dend_color_leave_edges %>% rotate(labels_char_vec), 
-                   horiz = T,
-                   colors = color_bars,
-                   sort_by_labels_order = FALSE, add = T, rowLabels = "")
-    } else {
-      color_bars <- informative_labels_df_ordered %>% 
-        dplyr::select(vasc_grp_color, color)
-      colored_bars(dend = cell_dend_color_leave_edges, horiz = T,
-                   colors = color_bars,
-                   sort_by_labels_order = FALSE, add = T, rowLabels = "")
+    if (plot_color_bar){
+      if (rotate_dendrogram) {
+        message("rotating color bar")
+        new_color_order <- tibble(new_lbs = labels(cell_dend_color_leave_edges), 
+                                  order = 1:length(labels(cell_dend_color_leave_edges)))
+        
+        color_bars <- suppressMessages(left_join(vasc_top_labels_df_rotated_order %>% 
+                                                   dplyr::select(new_lbs, cell_individual_color, vasc_grp_color), new_color_order ) %>%
+                                         arrange(order) %>% 
+                                         dplyr::select(vasc_grp_color, cell_individual_color))
+        colored_bars(dend = cell_dend_color_leave_edges %>% rotate(labels_char_vec), 
+                     horiz = T,
+                     colors = color_bars,
+                     sort_by_labels_order = FALSE, add = T, rowLabels = "")
+      } else {
+        color_bars <- informative_labels_df_ordered %>% 
+          dplyr::select(vasc_grp_color, color)
+        colored_bars(dend = cell_dend_color_leave_edges, horiz = T,
+                     colors = color_bars,
+                     sort_by_labels_order = FALSE, add = T, rowLabels = "")
+      }
     }
-    
     
     num_grps <- length(unique(informative_labels_df$grp)) + 1 # plus 1 for the 'non-vasc' group, essential unique sum of both columns grp, and grp_l
     
     # stop()
-    non_vasc_color <- unique(informative_labels_df_ordered %>% filter(grp != "Vascular cells") %>% .$vasc_grp_color)
-    vasc_color <- unique(informative_labels_df_ordered %>% filter(grp == "Vascular cells") %>% .$vasc_grp_color)
-    
-    # "topright"
-    # x = max(dend_height) + 0.25, y = 9.55
-    leg_temp <- bind_rows(informative_labels_df_ordered %>% distinct(grp_l, color, vasc_grp_color) %>% rename(grp = grp_l),
-                          informative_labels_df_ordered %>% distinct(grp_l2, color, vasc_grp_color) %>% rename(grp = grp_l2),
-                          informative_labels_df_ordered %>% distinct(grp, color, vasc_grp_color) ) %>%
-      distinct(grp, color, vasc_grp_color) %>%
-      mutate(grp = factor(grp, levels = c("HUVEC", "HAoSMC", "Cancer cells", "Other cells", "Vascular cells", "Non-vascular cells"))) %>%
-      arrange(grp)
-    leg_ <- bind_rows(leg_temp %>% slice(1:4) %>% dplyr::select(grp, color), 
-                      leg_temp %>% slice(5:8) %>% distinct(grp, vasc_grp_color) %>% rename(color = vasc_grp_color))
-    
-    leg_final <- c(as.character(leg_$grp), "Cluster assignment")
-    col_final <- c(leg_$color, border_color_set)
+    non_vasc_color <- unique(informative_labels_df_ordered %>% 
+                               filter(grp != "Vascular cells") %>% 
+                               .$vasc_grp_color)
+    vasc_color <- unique(informative_labels_df_ordered %>% 
+                           filter(grp == "Vascular cells") %>% 
+                           .$vasc_grp_color)
     
     # stop()
-    
-    xpos <- dend_height + 0.85
-    ypos <- ifelse(rotate_dendrogram, xpos*2, xpos + 7.65)
-    legend( x = xpos, y = ypos , title = "Legend", text.font = 3,
-            legend = leg_final,
-            col = col_final, 
-            lty = c(rep(1,length(leg_final)-1), rect_lty_set), # line style 
-            lwd = c(rep(14, length(leg_final)-1), 5), # line width
-            cex = 2.5, 
-            inset = c(INSET_MARGIN)+1.2,
-            yjust = 1.2) # legend size
-
+    if (plot_legend) {
+      leg_temp <- bind_rows(informative_labels_df_ordered %>% distinct(grp_l, color, vasc_grp_color) %>% rename(grp = grp_l),
+                            informative_labels_df_ordered %>% distinct(grp_l2, color, vasc_grp_color) %>% rename(grp = grp_l2),
+                            informative_labels_df_ordered %>% distinct(grp, color, vasc_grp_color) ) %>%
+        distinct(grp, color, vasc_grp_color) %>%
+        mutate(grp = factor(grp, levels = c("HUVEC", "HAoSMC", "Cancer cells", "Other cells", "Vascular cells", "Non-vascular cells"))) %>%
+        arrange(grp)
+      leg_ <- bind_rows(leg_temp %>% slice(1:4) %>% dplyr::select(grp, color), 
+                        leg_temp %>% slice(5:8) %>% distinct(grp, vasc_grp_color) %>% rename(color = vasc_grp_color))
+      
+      leg_final <- c(as.character(leg_$grp), "Cluster assignment")
+      col_final <- c(leg_$color, border_color_set)
+      
+      xpos <- dend_height + 0.85
+      ypos <- ifelse(rotate_dendrogram, xpos*2, xpos + 7.65)
+      legend( x = xpos, y = ypos , title = "Legend", text.font = 3,
+              legend = leg_final,
+              col = col_final, 
+              lty = c(rep(1,length(leg_final)-1), rect_lty_set), # line style 
+              lwd = c(rep(14, length(leg_final)-1), 5), # line width
+              cex = 2.5, 
+              inset = c(INSET_MARGIN)+1.2,
+              yjust = 1.2) # legend size
+    } 
   }
   
   
   plot_eps <- function() {
-
+    
     setEPS()
-    postscript(bg = "white", colormodel = "cmyk", file = dendro_output_fn, 
+    postscript(bg = "white", file = dendro_output_fn, 
                height = pdf_height, width = pdf_width, onefile = F)
     # pdf(file = dendro_output_fn, width = pdf_width, height = pdf_height, onefile = FALSE) # for some reason, without onefile = F, the pdf gets printed on the second page, with a blank page to start.. weird
     plot.new(); i <- 0
@@ -305,7 +315,7 @@ plot_pretty_dendrogram <- function(args,
   # plot everything
   plot_eps()
   plot_pdf()
-}
+  
   # stop()
 }
 
@@ -322,80 +332,6 @@ plot_pretty_dendrogram <- function(args,
 # m <- coef(y)[2]; m # so lower rect border changes -0.1618011 per unit of dendrogram height
 # nice fucking work man, this is sick
 # p100_base_output_dir <- "~/Downloads"
-
-
-
-
-
-
-
-# p100_data_lst <- p100_lst_obj; p100_analytes <- p100_data_lst$feature_set
-# gcp_data_lst <- gcp_lst_obj; gcp_analytes <- gcp_data_lst$feature_set
-# 
-# 
-# pert_interest_char <- "dmso"
-# #p100
-# i <- which(p100_res$pert$pert_iname %in% pert_interest_char)
-# p100_pert_data_dmso <- p100_res$pert[i,] # choose row
-# #gcp
-# i <- which(gcp_res$pert$pert_iname %in% pert_interest_char)
-# gcp_pert_data_dmso <- gcp_res$pert[i,] # choose row
-# 
-# 
-# moa_interest_char <- "Kinase inhibitor"
-# i <- which(p100_res$moa$pert_class %in% moa_interest_char)
-# p100_moa_data_ki <- p100_res$moa[i,] # choose row
-# 
-# i <- which(gcp_res$moa$pert_class %in% moa_interest_char)
-# gcp_moa_data_ki <- gcp_res$moa[i, ]
-# 
-# 
-# moa_interest_char <- "Epigenetic" 
-# i <- which(p100_res$moa$pert_class %in% moa_interest_char)
-# p100_moa_data_epi <- p100_res$moa[i,] # choose row
-# 
-# i <- which(gcp_res$moa$pert_class %in% moa_interest_char)
-# gcp_moa_data_epi <- gcp_res$moa[i, ]
-
-# plot_pretty_dendrogram(data = p100_pert_data_dmso, base_output_dir = p100_base_output_dir,
-#                        rotate_dendrogram = TRUE, INSET_MARGIN = -0.06)
-# plot_pretty_dendrogram(data = gcp_pert_data_dmso, base_output_dir = gcp_base_output_dir,
-#                        rotate_dendrogram = TRUE, INSET_MARGIN = -0.06)
-# 
-# plot_pretty_dendrogram(data = p100_moa_data_ki, base_output_dir = p100_base_output_dir, 
-#                        rotate_dendrogram = TRUE, INSET_MARGIN = -0.06)
-# plot_pretty_dendrogram(data = p100_moa_data_epi, base_output_dir = p100_base_output_dir, 
-#                        rotate_dendrogram = TRUE, INSET_MARGIN = -0.1)
-# 
-# plot_pretty_dendrogram(data = gcp_moa_data_ki, base_output_dir = gcp_base_output_dir, 
-#                        rotate_dendrogram = TRUE, INSET_MARGIN = -0.15)
-# plot_pretty_dendrogram(data = gcp_moa_data_epi, base_output_dir = gcp_base_output_dir, 
-#                        rotate_dendrogram = TRUE, INSET_MARGIN = -0.15)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
