@@ -20,6 +20,7 @@ library(colorspace)
 #   install.packages("BiocManager")
 # BiocManager::install(version = "3.13")
 # BiocManager::install(c("ComplexHeatmap", "cmapR", "circlize", "BiocParrellel"))
+# BiocManager::install(c("cmapR"))
 library(cmapR)
 library(circlize)
 library(ComplexHeatmap)
@@ -52,10 +53,6 @@ library(GetoptLong)
 library(gridExtra)
 
 set.seed(25)
-
-# if (!requireNamespace("BiocManager", quietly = TRUE))
-#   install.packages("BiocManager")
-# BiocManager::install(c("ComplexHeatmap", "BiocParallel", "cmapR", "circlize"))
 
 # specific_data_directory <- "vascular-data-LVL4"
 # args_fn_name <- "vascular_args.csv"
@@ -164,8 +161,8 @@ vascular_char_vec <- c("HUVEC", "HAoSMC", "Pericyte")
 ##########################################
 
 
-# p100_fn <- file.path("combined-datasets", "P100-All-Cell-Lines.gct")
-# gcp_fn <- file.path("combined-datasets", "GCP All Cell Lines.gct")
+p100_fn <- file.path("combined-datasets", "P100-All-Cell-Lines.gct")
+gcp_fn <- file.path("combined-datasets", "GCP All Cell Lines.gct")
 
 cat("\nReading and merging data...")
 #' @note cmapR help functions https://rdrr.io/github/cmap/cmapR/man/
@@ -213,6 +210,13 @@ shared_plate_id_df <- read_tsv(debug_fn,show_col_types = FALSE) %>%
   arrange(shared_plate_ids)
 shared_plate_ids <- shared_plate_id_df$shared_plate_ids
 
+file_summary_dat <- my_data %>%
+  distinct(dataset_type, fns) %>%
+  dplyr::select(dataset_type, fns) %>%
+  mutate(fns = basename(fns)) %>%
+  mutate(plate = str_extract(string = fns, pattern = "[P|p]late[0-9]*[a-z]*")) %>%
+  dplyr::select(dataset_type, plate, fns)
+write_tsv(file_summary_dat, file = file.path(data_directory, "fn_list.tsv"))
 
 # organize what was read in
 my_data_lst <- my_data %>%

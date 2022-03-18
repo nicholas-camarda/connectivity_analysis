@@ -29,6 +29,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   #               values_fn = median) %>%
   #   na.omit() 
   # my_perts <- drugs_to_plot_df$pert_iname
+  
    HUVEC_HAoSMC_perts <- my_obj %>%
     filter(cell_id %in% vascular_char_vec) %>%
     ungroup() %>%
@@ -170,12 +171,10 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
       dplyr::select(match, lst, path, everything())
     
   } else {
-    # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-diffe.RData")
-    # load("debug/debug_dat/debug-diffe.RData")
-    # stop()
     
     res_paths_tbl <- load_cached_objs(output_paths, 
                                       grouping_var = grouping_var)
+    
   }
   
   # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-diffe.RData")
@@ -183,10 +182,6 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   # stop()
   
   my_heatmap_and_dendro_obj_temp <- res_paths_tbl %>%
-    # pivot_wider(
-    #   id_cols = !!grouping_var,
-    #   names_from = match, values_from = lst
-    # ) %>%
     arrange(grouping_var) %>%
     mutate(
       base_path = file.path(output_directory, dataset_type),
@@ -338,9 +333,15 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   write_tsv(drug_dose_info_df, file = drug_dose_info_fn_name)
   write_tsv(drug_dose_info_df_distinct, file = drug_dose_info_fn_name_distinct)
   
-  
+
   message("Done with that batch!\n")
+  
+  return(list(my_dendro_obj, my_heatmap_obj, my_diffe_obj, res_paths_tbl) %>% setNames(c("dendro_res","heatmap_res", "diffe_res", "cache")))
 })
+
+message("Writing analysis res..")
+names(analysis_res) <- str_c(analysis_dat$dataset_type, analysis_dat$filter_vars, analysis_dat$grouping_var, sep = "-")
+write_rds(analysis_res, file = file.path(output_directory, "final_result.rds"), compress = "gz")
 
 message("\nDone with everything!")
 gc()

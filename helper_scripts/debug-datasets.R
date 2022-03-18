@@ -6,7 +6,7 @@ cat("\nReading and merging data...")
 #' the values in this data are Z-scores!!!
 
 #' TODO change this to [analysis_args.csv] when ready
-analysis_fn <- file.path(data_directory, "test_args.csv")
+analysis_fn <- file.path(data_directory, "all_args.csv")
 analysis_dat_temp <- read_csv(analysis_fn, comment = "#") %>%
   mutate_all(str_trim) %>%
   mutate(filter_vars = map(filter_vars, collect_args)) %>%
@@ -28,7 +28,7 @@ srilas_data_final <- srilas_data$data[[1]]%>%
   mutate(det_plate = str_extract(string = det_plate, pattern = "P-[0-9]*"))
 
 # read in all 
-my_data <- tibble(fns = dir(file.path(datasets_directory, "LINCS-data"), full.names = T, recursive = T)) %>%
+my_data <- tibble(fns = dir(file.path(datasets_directory, "All-LINCS-data-LVL4"), full.names = T, recursive = T)) %>%
   distinct() %>% 
   mutate(gct = map(
     .x = fns,
@@ -40,7 +40,8 @@ my_data <- tibble(fns = dir(file.path(datasets_directory, "LINCS-data"), full.na
   filter(dataset_type == "P100")
 
 message("Merging... Matching to Srila's data")
-my_data_temp_final <- data.table::rbindlist(my_data$data, fill = TRUE, use.names = TRUE) %>% as_tibble() %>%
+my_data_temp_final <- data.table::rbindlist(my_data$data, fill = TRUE, use.names = TRUE) %>% 
+  as_tibble() %>%
   mutate(cell_id = ifelse(cell_id == "Pericytes", "Pericyte", cell_id)) %>%
   mutate(det_plate = str_extract(string = det_plate, pattern = "P-[0-9]*"))
   # mutate(det_plate = str_replace(string = det_plate, pattern = "G", replacement = "P")) 
@@ -51,7 +52,8 @@ all_plate_ids <- union(srilas_data_final$det_plate, my_data_temp_final$det_plate
 
 my_data_final <- my_data_temp_final %>% filter(det_plate %in% shared_plate_ids)
 dir.create("/Users/ncamarda/OneDrive - Tufts/phd/ws/proteomics/debug")
-write_tsv(tibble(shared_plate_ids = shared_plate_ids), file = "/Users/ncamarda/OneDrive - Tufts/phd/ws/proteomics/debug/shared_plate_ids.tsv")
+write_tsv(tibble(shared_plate_ids = shared_plate_ids), 
+          file = "/Users/ncamarda/OneDrive - Tufts/phd/ws/proteomics/debug/shared_plate_ids.tsv")
 # less data probably means more filtered?
 
 # create drug df from excel file of drugs
@@ -102,10 +104,16 @@ different_dist <- all_together %>%
   filter(pert_iname %in% my_perts) %>%
   group_by(cell_id, data_id) %>%
   dplyr::select(cell_id,pert_iname, data_id, value) %>%
-  pivot_wider(id_cols = pert_iname:cell_id, data_id) %>%
-  group_by(cell_id, pert_iname) %>%
-  mutate(p_val_ks = map2_dbl(.x = Srila, .y = Panorama, .f = function(x,y){
-    ks.test(x,y)$p.value 
+  pivot_wider(id_cols = pert_iname:cell_id, data_id, 
+              values_fn = function(x) median(x, na.rm = T)) %>%
+  group_by(pert_iname) %>%
+  mutate(p_val_ks = map2_dbl(.x = Srila, .y = Panorama, .f = function(x,y) {
+    if (length(x) > 2 & length(y) > 2) {
+      r <- ks.test(x,y)$p.value 
+    } else {
+      r <- NA
+    }
+    return(r)
   })) %>%
   # if significant, these two were draw from separate distribtions
   mutate(different_distributions = ifelse(p_val_ks < 0.05, T, F))
@@ -184,3 +192,4 @@ dir.create(debug_datasets_dir, showWarnings = FALSE, recursive = TRUE)
 glst <- ggarrange(g1, g2, g3, g4, nrow = 2, ncol = 2)
 ggsave(glst, file = file.path(debug_datasets_dir, "glst.pdf"), width = 12, height = 12)
 ggsave(g1a, file = file.path(debug_datasets_dir, "g1a.pdf"), width = 12, height = 12)
+
