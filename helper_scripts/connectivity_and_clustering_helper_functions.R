@@ -817,14 +817,17 @@ plot_diffe_results <- function(args){
   
   
   # for plotting just vascular cells later on
+  # discovered a weird silent bug that was only apparent on windows...
   new_main <- diffe_final_res %>%
-    mutate(vascular_str_name_idx = str_locate(base_clust_comp_name, pattern = "HUVEC|HAoSMC"),
-           keep_ = ifelse(!is.na(vascular_str_name_idx), T, F)) %>%
-    filter(keep_)
+    mutate(keep_ = map_lgl(base_clust_comp_name, .f = function(x) ifelse(any(!is.na(str_locate(string = x, pattern = "HUVEC|HAoSMC"))), T, F))) %>%
+    filter(keep_); new_main
+  
   new_sig <- to_plot_signif_df %>%
-    mutate(vascular_str_name_idx = str_locate(base_clust_comp_name, pattern = "HUVEC|HAoSMC"),
-           keep_ = ifelse(!is.na(vascular_str_name_idx), T, F)) %>%
-    filter(keep_)
+    mutate(keep_ = map_lgl(base_clust_comp_name, .f = function(x) ifelse(any(!is.na(str_locate(string = x, pattern = "HUVEC|HAoSMC"))), T, F))) %>%
+    filter(keep_); new_sig
+    # mutate(vascular_str_name_idx = str_locate(base_clust_comp_name, pattern = "HUVEC|HAoSMC"),
+    #        keep_ = ifelse(!is.na(vascular_str_name_idx), T, F)) %>%
+    # dplyr::filter(keep_)
   groups <- unique(new_main$base_clust_comp_name)
   
   # stop()

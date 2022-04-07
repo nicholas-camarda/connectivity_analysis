@@ -24,7 +24,7 @@ library(colorspace)
 library(cmapR)
 library(circlize)
 library(ComplexHeatmap)
-library(BiocParallel)
+# library(BiocParallel)
 
 # for seg fault issues.. https://issueexplorer.com/issue/wch/extrafont/89
 library(extrafont)
@@ -77,7 +77,7 @@ winos <- ifelse(grepl("windows", Sys.info()["sysname"], ignore.case = T), 1,
 if (winos == 1) {
   working_directory <- file.path(
     "C:", "Users", "ncama",
-    "OneDrive - Tufts", "phd", "ws"
+    "OneDrive - Tufts", "phd", "ws", "proteomics"
   )
 } else if (winos == 0) {
   working_directory <- file.path(
