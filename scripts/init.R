@@ -71,7 +71,7 @@ handlers(handler_progress(
 ))
 ## progress bar ##
 
-
+## set up for multiple OS
 winos <- ifelse(grepl("windows", Sys.info()["sysname"], ignore.case = T), 1, 
                 ifelse(grepl("linux", Sys.info()["sysname"], ignore.case = T), 2, 0))
 if (winos == 1) {
@@ -91,6 +91,7 @@ if (winos == 1) {
   )
 }
 
+# The level of data we are processing
 lvl4_bool_data <- str_detect(string = specific_data_directory, 
                              pattern = "LVL4") 
 
