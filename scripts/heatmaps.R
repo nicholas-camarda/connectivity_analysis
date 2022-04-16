@@ -371,9 +371,9 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   )
   # set color breaks at quantiles
   # c(0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95)
-  # c(0.025, 0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95, 0.975)
+  qnts <- c(0.025, 0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95, 0.975)
   #  c(0.001, 0.025, 0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95, 0.975, 0.999)
-  qnts <- c(0.001, 0.025, 0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95, 0.975, 0.999)
+  # qnts <- c(0.001, 0.025, 0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95, 0.975, 0.999)
   breaks <- sapply(rev(qnts), function(q) quantile(reduced_mat, q, na.rm = T, names = F))
   col_fun <- colorRamp2(breaks = breaks, colors = brewer.pal(n = length(breaks), name = "RdYlBu"))
   
