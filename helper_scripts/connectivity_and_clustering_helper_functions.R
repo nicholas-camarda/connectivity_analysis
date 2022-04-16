@@ -493,11 +493,11 @@ run_diffe <- function(dat, cob, dname) {
         # message("Not enough data to compute diffe for ", k)
         res <- tibble(
           analyte = k,
-          logFC = NA, mean_logFC = NA, base_clust_comp = as.integer(i),
+          logFC = NA, base_clust_comp = as.integer(i),
           base_clust_comp_name = base_clust_comp_name,
           ks_statistic = NA,
           ks_boot_statistic = NA,
-          signal_to_noise_statistic = NA,
+          # signal_to_noise_statistic = NA,
           directional_stat = NA,
           p_val = NA, p_val_boot = NA,
           p_val_bh = NA,
@@ -532,12 +532,11 @@ run_diffe <- function(dat, cob, dname) {
       #' @note assumes data are already log transformed!!!
       #' So a fold change is simply a difference, not a division!!
       #' is this the correct way to calculate diffex??
-      #'
-      logfc <- median(c1, na.rm = T) - median(c2, na.rm = T)
-      mean_logfc <- mean(c1, na.rm = TRUE) - mean(c2, na.rm = TRUE)
+    
       
+      # logfc <- median(c1, na.rm = T) - median(c2, na.rm = T)
+      logfc <- mean(c1, na.rm = TRUE) - mean(c2, na.rm = TRUE)
       d_stat <- ifelse(logfc > 0, "++", "--")
-      mean_d_stat <- ifelse(logfc > 0, "++", "--")
       
       min_x <- min(c(min(c1, na.rm = T), min(c2, na.rm = T)))
       max_x <- max(c(max(c1, na.rm = T), max(c2, na.rm = T)))
@@ -564,20 +563,18 @@ run_diffe <- function(dat, cob, dname) {
       
       # compute signal to noise
       sum_grp_sd <- sd(c2, na.rm = T) + sd(c1, na.rm = T) # this is sd of log-transformed data
-      signal_to_nose <- mean_logfc / sum_grp_sd
+      # signal_to_nose <- mean_logfc / sum_grp_sd
       
       #' @note I'm pretty sure we want to adjust the p-values per cluster comparison...
       res <- tibble(
         analyte = k, 
-        logFC = logfc, # median logFC
-        mean_logFC = mean_logfc, # mean logFC
+        logFC = logfc, 
         base_clust_comp = i,
         base_clust_comp_name = base_clust_comp_name,
         ks_statistic = stat,
         ks_boot_statistic = stat_boot,
-        signal_to_noise_statistic = signal_to_nose,
-        directional_stat = d_stat, # this is based on the median
-        mean_directional_stat = mean_d_stat, # this is based on the *mean*
+        # signal_to_noise_statistic = signal_to_nose,
+        directional_stat = d_stat, 
         p_val = ks$p.value, p_val_boot = ks_boot$ks.boot.pvalue,
         p_val_bh = p.adjust(ks$p.value, method = "BH"),
         p_val_boot_bh = p.adjust(ks_boot$ks.boot.pvalue, method = "BH")
