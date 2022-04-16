@@ -52,7 +52,8 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     filter(pert_iname %in% my_perts) %>%
     filter(!!sym(grouping_var) %in% filter_vars) %>%
     # if we are excluding perts, make sure this runs
-    filter(!(pert_iname %in% exclude))
+    filter(!(pert_iname %in% exclude)) %>%
+    filter(cell_id != "MCF10A")
   
   #' print some summary information about filtered obj
   print_helper_info(sub_obj_temp, grouping_var)

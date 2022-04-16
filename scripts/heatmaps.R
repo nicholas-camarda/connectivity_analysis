@@ -117,6 +117,7 @@ plot_heatmap <- function(args) {
   diff_ex_df <- args$diffe_lst %>%
     pluck(1)
   
+  # stop()
   # generate the row annotations
   row_annots_df_include_nonsig_all <- diff_ex_df %>%
     mutate(`-log10(q)` = -log(p_val_boot_bh, base = 10)) %>%
@@ -522,14 +523,17 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
                                           "Drug Glossary_edited.xlsx")) %>%
     mutate(pert_iname = tolower(Drug), moa_simple = `MOA simplified`) %>%
     mutate(pert_iname = ifelse(pert_iname == "dmso", toupper(pert_iname), pert_iname)) %>%
-    dplyr::select(pert_iname, moa_simple) %>%
-    mutate(moa_simple = ifelse(is.na(moa_simple), "", moa_simple))
+    dplyr::select(pert_iname, moa_simple) %>% # Class
+    mutate(moa_simple = ifelse(is.na(moa_simple), "", moa_simple)) %>%
+    distinct()
+  
+  which_dat
   
   link_moa_to_pert <- tibble(pert_iname = perturbations_char_vec_temp) %>%
     left_join(extra_pert_info, by = "pert_iname") %>%
     rename(pert_iname_temp = pert_iname) %>%
     mutate(pert_iname = str_c(pert_iname_temp, " (", moa_simple, ")", 
-                              sep = ""))
+                              sep = "")) 
   
   perturbations_char_vec <- link_moa_to_pert$pert_iname
   n_u_perts <- length(unique(perturbations_char_vec))
@@ -727,8 +731,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   }
   
   d_statistics_vec <- round(row_order_df$d_stat_val, 3)
-  # fold change
-  fc_vec <- round(2^row_order_df$logFC, 3) # logFC is log_2
+  fc_vec <- round(2^row_order_df$logFC, 3) # logFC is median log_2
   
   color_fc_row_labels_df <- row_order_df %>%
     mutate(color = ifelse(fc < 1, "blue", "red")) %>%

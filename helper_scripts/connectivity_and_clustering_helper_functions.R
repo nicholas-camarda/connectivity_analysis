@@ -400,9 +400,9 @@ run_diffe <- function(dat, cob, dname) {
   # which_dat <- "P100"
   
   
-  # stop()
-  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-gcp-epi-diffe.RData")
-  # load("debug/debug_dat/debug-gcp-epi-diffe.RData")
+
+  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-diffe.RData")
+  # load("debug/debug_dat/debug-diffe.RData")
   # stop()
   
   which_dat <- unique(force_natural(dat$which_dat))
@@ -457,7 +457,7 @@ run_diffe <- function(dat, cob, dname) {
   
   message("Computing differential analytes..")
   diffe_by_clust_df <- map_df(clusts_int_vec, function(ith_cluster) {
-    # ith_cluster <- clusts_int_vec[4]
+    # ith_cluster <- clusts_int_vec[1]
     
     base_clust_comp_name <- clust_label_df %>%
       dplyr::select(base_clust_comp, base_clust_comp_name) %>% # take the correct cluster naming convention column
@@ -469,7 +469,7 @@ run_diffe <- function(dat, cob, dname) {
     p2()
     
     cluster_res <- map2_df(feature_names, ith_cluster, function(k, i) {
-      # k <- feature_names[1]; i <- ith_cluster[1]
+      # k <- feature_names[42]; i <- ith_cluster[1]
       #
       # DEBUG:
       # message(k)
@@ -484,16 +484,16 @@ run_diffe <- function(dat, cob, dname) {
       # dens_dat <- tibble(c = c(c1, c2), g = c(rep("c1", length(c1)), rep("c2", length(c2))))
       # ggecdf(data = dens_dat, x = "c", color = "g", ggtheme = theme_bw(), palette = "jco")
       
-      n_non_na_vec1 <- length(c1[!is.na(c1)])
-      n_non_na_vec1
-      n_non_na_vec2 <- length(c2[!is.na(c2)])
-      n_non_na_vec2
+      # stop()
+      
+      n_non_na_vec1 <- length(c1[!is.na(c1)]); n_non_na_vec1
+      n_non_na_vec2 <- length(c2[!is.na(c2)]); n_non_na_vec2
       
       if (n_non_na_vec1 < 1 | n_non_na_vec2 < 1) {
         # message("Not enough data to compute diffe for ", k)
         res <- tibble(
           analyte = k,
-          logFC = NA, base_clust_comp = as.integer(i),
+          logFC = NA, mean_logFC = NA, base_clust_comp = as.integer(i),
           base_clust_comp_name = base_clust_comp_name,
           ks_statistic = NA,
           ks_boot_statistic = NA,
@@ -529,18 +529,15 @@ run_diffe <- function(dat, cob, dname) {
       stat <- ks$statistic
       stat_boot <- ks_boot$ks$statistic
       
-      c1_median <- median(c1, na.rm = T)
-      c1_median
-      c2_median <- median(c2, na.rm = T)
-      c2_median
-      
       #' @note assumes data are already log transformed!!!
       #' So a fold change is simply a difference, not a division!!
       #' is this the correct way to calculate diffex??
       #'
       logfc <- median(c1, na.rm = T) - median(c2, na.rm = T)
-      logfc
+      mean_logfc <- mean(c1, na.rm = TRUE) - mean(c2, na.rm = TRUE)
+      
       d_stat <- ifelse(logfc > 0, "++", "--")
+      mean_d_stat <- ifelse(logfc > 0, "++", "--")
       
       min_x <- min(c(min(c1, na.rm = T), min(c2, na.rm = T)))
       max_x <- max(c(max(c1, na.rm = T), max(c2, na.rm = T)))
@@ -566,18 +563,21 @@ run_diffe <- function(dat, cob, dname) {
       c2_names_df
       
       # compute signal to noise
-      mean_grp_diff <- mean(c1, na.rm = T) - mean(c2, na.rm = T)
-      sum_grp_sd <- sd(c2, na.rm = T) + sd(c1, na.rm = T)
-      signal_to_nose <- mean_grp_diff / sum_grp_sd
+      sum_grp_sd <- sd(c2, na.rm = T) + sd(c1, na.rm = T) # this is sd of log-transformed data
+      signal_to_nose <- mean_logfc / sum_grp_sd
       
       #' @note I'm pretty sure we want to adjust the p-values per cluster comparison...
       res <- tibble(
-        analyte = k, logFC = logfc, base_clust_comp = i,
+        analyte = k, 
+        logFC = logfc, # median logFC
+        mean_logFC = mean_logfc, # mean logFC
+        base_clust_comp = i,
         base_clust_comp_name = base_clust_comp_name,
         ks_statistic = stat,
         ks_boot_statistic = stat_boot,
         signal_to_noise_statistic = signal_to_nose,
-        directional_stat = d_stat,
+        directional_stat = d_stat, # this is based on the median
+        mean_directional_stat = mean_d_stat, # this is based on the *mean*
         p_val = ks$p.value, p_val_boot = ks_boot$ks.boot.pvalue,
         p_val_bh = p.adjust(ks$p.value, method = "BH"),
         p_val_boot_bh = p.adjust(ks_boot$ks.boot.pvalue, method = "BH")
@@ -615,24 +615,21 @@ run_diffe <- function(dat, cob, dname) {
     # so that log doesn't cause inf
     # mutate(p_val_boot_bh = p_val_boot_bh + .Machine$double.xmin) %>%
     mutate(neg_log10_p_val_bh = -log10(p_val_bh),
-           neg_log10_p_val_boot_bh = -log10(p_val_boot_bh)) 
+           neg_log10_p_val_boot_bh = -log10(p_val_boot_bh)) %>%
+    mutate(fc = 2^logFC,
+           mean_fc = 2^mean_logFC) %>%
+    mutate(signif_and_fold = ifelse(signif & (fc >= FC_UPPER_BOUND), TRUE,
+                                    ifelse(signif & (fc < FC_LOWER_BOUND), TRUE, FALSE)
+    )) 
   
   if (tolower(which_dat) == "p100") {
     diffe_final_res <- diffe_final_res_temp %>% 
       mutate(label_ = str_c("p", str_c(mark, analyte, sep = " "), sep = "")) %>%
-      mutate(fc = 2^logFC) %>%
-      mutate(signif_and_fold = ifelse(signif & (fc >= FC_UPPER_BOUND), TRUE,
-                                      ifelse(signif & (fc < FC_LOWER_BOUND), TRUE, FALSE)
-      )) %>%
-      dplyr::select(signif_and_fold, signif, logFC, fc, everything())
+      dplyr::select(signif_and_fold, signif, logFC, fc, mean_logFC, mean_fc, everything())
   } else {
     diffe_final_res <- diffe_final_res_temp %>% 
       mutate(label_ = analyte) %>%
-      mutate(fc = 2^logFC) %>%
-      mutate(signif_and_fold = ifelse(signif & (fc >= FC_UPPER_BOUND), TRUE,
-                                      ifelse(signif & (fc < FC_LOWER_BOUND), TRUE, FALSE)
-      )) %>%
-      dplyr::select(signif_and_fold, signif, logFC, fc, everything())
+      dplyr::select(signif_and_fold, signif, logFC, fc, mean_logFC, mean_fc, everything())
   }
   
   signif_df <- diffe_final_res %>%
@@ -672,25 +669,28 @@ plot_diffe_results <- function(args){
     dname_title <- dname
   }
   
-  sig_up_df <- signif_df %>% 
+  #' *DECIDE WHETHER TO USE MEAN OR MEDIAN* - here we're using median if comments are active
+  diffe_final_res <- diffe_final_res # %>% mutate(fc = mean_fc) # for mean
+  signif_df_final <- signif_df # %>% mutate(fc = mean_fc) # for mean
+    
+  sig_up_df <- signif_df_final %>% 
     filter(neg_log10_p_val_bh >= 1 & 
              (fc >= FC_UPPER_BOUND))
-  sig_down_df <- signif_df %>% 
+  sig_down_df <- signif_df_final %>% 
     filter(neg_log10_p_val_bh >= 1 & 
              (fc <= FC_LOWER_BOUND))
   
-  to_plot_signif_df <- bind_rows(sig_up_df,sig_down_df) %>%
+  to_plot_signif_df_final <- bind_rows(sig_up_df,sig_down_df) %>%
     mutate(label_ = str_split(label_, "_", simplify = TRUE)[,1])
   
   # pretty breaks!! pretty_breaks
   # https://stackoverflow.com/questions/11335836/increase-number-of-axis-ticks
-  plot_diffe_all <- function(diffe_final_res, to_plot_signif_df, which_dat, dname_title) {
+  plot_diffe_all <- function(diffe_final_res, to_plot_signif_df_final, which_dat, dname_title) {
     
-    # stop()
-    min_x_lim <- min(to_plot_signif_df$fc, na.rm = T) - 0.1
-    max_x_lim <- max(to_plot_signif_df$fc, na.rm = T) + 0.1
+    min_x_lim <- min(to_plot_signif_df_final$fc, na.rm = T) - 0.1
+    max_x_lim <- max(to_plot_signif_df_final$fc, na.rm = T) + 0.1
     
-    filt_signif <- to_plot_signif_df %>% 
+    filt_signif <- to_plot_signif_df_final %>% 
       filter(neg_log10_p_val_bh < Inf & neg_log10_p_val_bh > -Inf) %>% 
       .$neg_log10_p_val_bh
     max_y_lim <- max(filt_signif, na.rm = T)
@@ -703,13 +703,7 @@ plot_diffe_results <- function(args){
       geom_point(aes(x = fc, y = neg_log10_p_val_bh), # size = neg_log10_p_val_bh
                  size = rel_size_point, shape = 21, color = "black", # filled circle with outline
       ) +
-      # make the scale fit the signif bar
-      # signif_df %>% 
-      # filter(neg_log10_p_val_bh >= 1 & 
-      #          (fc >= FC_UPPER_BOUND),
-      #        neg_log10_p_val_bh >= 1 & 
-      #          (fc <= FC_UPPER_BOUND)), 
-      geom_point(data = to_plot_signif_df,
+      geom_point(data = to_plot_signif_df_final,
                  mapping = aes(x = fc, y = neg_log10_p_val_bh, fill = fc), 
                  size = rel_size_point, shape = 21, color = "black") +
       geom_vline(
@@ -720,7 +714,7 @@ plot_diffe_results <- function(args){
         yintercept = as.numeric(-log10(0.1)),
         col = "orange", linetype = 6,
       ) +
-      geom_label_repel(to_plot_signif_df %>% 
+      geom_label_repel(to_plot_signif_df_final %>% 
                          na.omit() %>%
                          filter(neg_log10_p_val_bh >= 1 & 
                                   (fc >= FC_UPPER_BOUND)),
@@ -745,14 +739,11 @@ plot_diffe_results <- function(args){
                        force = 2,
                        nudge_x = 0.01,
                        nudge_y = 0.01,
-                       # nudge_y = assignments_up$nudge_y,
-                       # nudge_y = ifelse(sig_up_df$neg_log10_p_val_bh >= 3, -0.5, -0.2),
-                       # nudge_x = assignments_up$nudge_x,
                        xlim = c(1, max_x_lim),
                        ylim = c(0, max_y_lim+1),
                        arrow = arrow(length = unit(0.0075, "npc"))) +
       
-      geom_label_repel(to_plot_signif_df %>% na.omit() %>%
+      geom_label_repel(to_plot_signif_df_final %>% na.omit() %>%
                          filter(neg_log10_p_val_bh >= 1 & 
                                   (fc <= FC_LOWER_BOUND)),
                        mapping = aes(x = fc, y = neg_log10_p_val_bh,
@@ -763,8 +754,6 @@ plot_diffe_results <- function(args){
                        verbose = TRUE,
                        size = rel_size_label,
                        max.iter = 1e9,
-                       # max.time = 10,
-                       # segment.shape = -1,
                        segment.size = rel_segment_size,
                        segment.curvature = -0.6,
                        segment.square = TRUE,
@@ -776,8 +765,6 @@ plot_diffe_results <- function(args){
                        force = 2,
                        nudge_x = -0.01,
                        nudge_y = 0.01,
-                       # nudge_y = assignments_down$nudge_y,
-                       # nudge_x = assignments_down$nudge_x,
                        xlim = c(min_x_lim-0.25, 1),
                        ylim = c(0, max_y_lim+1),
                        arrow = arrow(length = unit(0.0075, "npc"))) +
@@ -801,9 +788,7 @@ plot_diffe_results <- function(args){
             axis.text.y = element_text(size = rel(2.5), angle = 45),
             axis.text.x = element_text(size = rel(2.5), angle = 45,  vjust = 0.5)
       ) +
-      # guides(size = FALSE) +
       labs(
-        # color = "Directional change",
         caption = "BH.q.val = Benjamini-Hochberg-Corrected P-value (q) \nCut-off for displaying label: q < 0.1 \nDifference between groups calculated using ks.test()"
       ) +
       ylab("-Log10(BH.q.val)") +
@@ -812,7 +797,7 @@ plot_diffe_results <- function(args){
     return(diffe_g)
   }
   
-  diffe_g <- plot_diffe_all(diffe_final_res, to_plot_signif_df, which_dat, dname_title) + 
+  diffe_g <- plot_diffe_all(diffe_final_res, to_plot_signif_df_final, which_dat, dname_title) + 
     facet_grid(~base_clust_comp_name, scales = "free"); diffe_g
   
   
@@ -825,7 +810,7 @@ plot_diffe_results <- function(args){
     })) %>%
     filter(keep_); new_main
   
-  new_sig <- to_plot_signif_df %>%
+  new_sig <- to_plot_signif_df_final %>%
     mutate(keep_ = map_lgl(base_clust_comp_name, .f = function(x) {
       r <- ifelse(any(!is.na(str_locate(string = x, pattern = "HUVEC|HAoSMC"))), T, F)
       return(r)
@@ -840,7 +825,7 @@ plot_diffe_results <- function(args){
   diffe_g_vasc <- lapply(groups, FUN = function(g) {
     ndf <- filter(new_main, base_clust_comp_name == g)
     nns <- filter(new_sig, base_clust_comp_name == g)
-    res <- plot_diffe_all(diffe_final_res = ndf, to_plot_signif_df = nns, 
+    res <- plot_diffe_all(diffe_final_res = ndf, to_plot_signif_df_final = nns, 
                           which_dat = which_dat, dname_title = dname_title) 
     return(res)
   }); diffe_g_vasc
