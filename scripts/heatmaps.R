@@ -651,8 +651,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
     # filter(logFC < LOGFC_CUTOFF) %>%
     arrange(desc(`fc`))
   top_down
-  row_order_df <- bind_rows(top_up, top_down) %>%
-    filter(analyte != "RPS6KA1_1")
+  row_order_df <- bind_rows(top_up, top_down)
   row_order_df
   
   setdiff(rownames(filtered_test_mat), row_order_df$analyte)

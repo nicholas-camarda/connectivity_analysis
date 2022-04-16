@@ -114,7 +114,10 @@ read_and_summarize_data <- function(l, dtype_) {
     mutate(replicate_id = str_c(master_id, column_id, det_plate,  sep = "::")) %>%
     dplyr::select(master_id, replicate_id, everything()) %>%
     # group_by(replicate_id, pr_gene_symbol) %>%
-    distinct(replicate_id, pr_gene_symbol, value, .keep_all = TRUE); res_temp
+    distinct(replicate_id, pr_gene_symbol, value, .keep_all = TRUE) %>%
+    # these two filter steps FIRST!
+    filter(pr_gene_symbol != "RPS6KA1_1", 
+           cell_id != "MCF10A"); res_temp
 
   if ("pr_gcp_histone_mark" %in% colnames(res_temp)) {
     # no need to do unique names for the histones...

@@ -272,6 +272,10 @@ analysis_dat <- inner_join(
   my_data_obj_final, # my_data_obj_final
   by = "dataset_type"
 )
+analysis_dat %>% 
+  unnest(c(data)) %>%
+  filter(pr_gene_symbol != "RPS6KA1_1", 
+         cell_id != "MCF10A")
 
 grouping_var_for_summary <- unlist(analysis_dat_temp$grouping_var)
 filter_vars_for_summary <- unlist(analysis_dat_temp$filter_vars)
