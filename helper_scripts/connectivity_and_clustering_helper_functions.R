@@ -512,10 +512,7 @@ run_diffe <- function(dat, cob, dname) {
       }
       
       ks <- ks.test(c1, c2, alternative = "two.sided")
-      ks
       ks_boot <- ks.boot(c1, c2, nboots = 1000, alternative = "two.sided")
-      ks_boot
-      
       
       # LINCS espouses the concept of making different data levels available for public use.  Different data levels correspond different steps along our processing workflow.  The LINCS PCCSE levels are defined as follows:
       # Level 0 - Raw Mass Spectrometry Data (LCMS) - will be available through a chorusproject.org repository in the future
@@ -613,8 +610,7 @@ run_diffe <- function(dat, cob, dname) {
     # mutate(p_val_boot_bh = p_val_boot_bh + .Machine$double.xmin) %>%
     mutate(neg_log10_p_val_bh = -log10(p_val_bh),
            neg_log10_p_val_boot_bh = -log10(p_val_boot_bh)) %>%
-    mutate(fc = 2^logFC,
-           mean_fc = 2^mean_logFC) %>%
+    mutate(fc = 2^logFC) %>% # mean_fc = 2^mean_logFC
     mutate(signif_and_fold = ifelse(signif & (fc >= FC_UPPER_BOUND), TRUE,
                                     ifelse(signif & (fc < FC_LOWER_BOUND), TRUE, FALSE)
     )) 
@@ -622,11 +618,11 @@ run_diffe <- function(dat, cob, dname) {
   if (tolower(which_dat) == "p100") {
     diffe_final_res <- diffe_final_res_temp %>% 
       mutate(label_ = str_c("p", str_c(mark, analyte, sep = " "), sep = "")) %>%
-      dplyr::select(signif_and_fold, signif, logFC, fc, mean_logFC, mean_fc, everything())
+      dplyr::select(signif_and_fold, signif, logFC, fc, everything())
   } else {
     diffe_final_res <- diffe_final_res_temp %>% 
       mutate(label_ = analyte) %>%
-      dplyr::select(signif_and_fold, signif, logFC, fc, mean_logFC, mean_fc, everything())
+      dplyr::select(signif_and_fold, signif, logFC, fc, everything())
   }
   
   signif_df <- diffe_final_res %>%

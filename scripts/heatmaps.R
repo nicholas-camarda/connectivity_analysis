@@ -636,7 +636,9 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   }
   
   
-  
+  # save(list = ls(all.names = TRUE),
+  #            file = "debug/debug_dat/debug-duplicate-analytes.RData")
+  # stop()
   
   # get top up and down
   # needs to be relative to 1
@@ -649,7 +651,8 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
     # filter(logFC < LOGFC_CUTOFF) %>%
     arrange(desc(`fc`))
   top_down
-  row_order_df <- bind_rows(top_up, top_down)
+  row_order_df <- bind_rows(top_up, top_down) %>%
+    filter(analyte != "RPS6KA1_1")
   row_order_df
   
   setdiff(rownames(filtered_test_mat), row_order_df$analyte)
@@ -981,7 +984,8 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   #   # annotation_legend_param = list(`bar` = list(title = "Q-value"))
   # )
   # draw(left_ha)
-  
+  # 
+
   
   ht_opt$message = FALSE
   ht_opt$COLUMN_ANNO_PADDING <- unit(2, "mm")
