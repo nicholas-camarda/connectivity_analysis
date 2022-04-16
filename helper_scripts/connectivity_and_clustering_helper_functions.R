@@ -789,7 +789,7 @@ plot_diffe_results <- function(args){
         caption = "BH.q.val = Benjamini-Hochberg-Corrected P-value (q) \nCut-off for displaying label: q < 0.1 \nDifference between groups calculated using ks.test()"
       ) +
       ylab("-Log10(BH.q.val)") +
-      xlab("Ratio of median Fold Change\nbetween Clusters") +
+      xlab("Ratio of Mean Fold Change\nbetween Clusters") +
       ggtitle(label = qq("@{toupper(which_dat)}, @{dname_title}")) 
     return(diffe_g)
   }

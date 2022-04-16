@@ -56,8 +56,8 @@ set.seed(25)
 
 # specific_data_directory <- "vascular-data-LVL4"
 specific_data_directory <- "All-LINCS-data-LVL4" 
-# args_fn_name <- "vascular_args.csv"
-args_fn_name <- "all_args.csv"
+args_fn_name <- "vascular_args.csv"
+# args_fn_name <- "all_args.csv"
 
 
 ## progress bar ##
