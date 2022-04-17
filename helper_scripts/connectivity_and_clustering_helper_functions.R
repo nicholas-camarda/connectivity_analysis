@@ -463,22 +463,17 @@ run_diffe <- function(dat, cob, dname) {
     
     cluster_res <- map2_df(feature_names, ith_cluster, function(k, i) {
       # k <- feature_names[42]; i <- ith_cluster[1]
-      #
       # DEBUG:
       # message(k)
       
       c1 <- matrix_for_diffe %>%
         filter(base_clust_comp == i) %>%
         pluck(k)
+      
       c2 <- matrix_for_diffe %>%
         filter(base_clust_comp != i) %>%
         pluck(k)
-      
-      # dens_dat <- tibble(c = c(c1, c2), g = c(rep("c1", length(c1)), rep("c2", length(c2))))
-      # ggecdf(data = dens_dat, x = "c", color = "g", ggtheme = theme_bw(), palette = "jco")
-      
-      # stop()
-      
+
       n_non_na_vec1 <- length(c1[!is.na(c1)]); n_non_na_vec1
       n_non_na_vec2 <- length(c2[!is.na(c2)]); n_non_na_vec2
       
@@ -524,8 +519,8 @@ run_diffe <- function(dat, cob, dname) {
       #' is this the correct way to calculate diffex??
     
       
-      # logfc <- median(c1, na.rm = T) - median(c2, na.rm = T)
-      logfc <- mean(c1, na.rm = TRUE) - mean(c2, na.rm = TRUE)
+      logfc <- median(c1, na.rm = T) - median(c2, na.rm = T)
+      # logfc <- mean(c1, na.rm = TRUE) - mean(c2, na.rm = TRUE)
       d_stat <- ifelse(logfc > 0, "++", "--")
       
       min_x <- min(c(min(c1, na.rm = T), min(c2, na.rm = T)))
@@ -781,7 +776,7 @@ plot_diffe_results <- function(args){
         caption = "BH.q.val = Benjamini-Hochberg-Corrected P-value (q) \nCut-off for displaying label: q < 0.1 \nDifference between groups calculated using ks.test()"
       ) +
       ylab("-Log10(BH.q.val)") +
-      xlab("Ratio of Mean Fold Change\nbetween Clusters") +
+      xlab("Ratio of Median Fold Change\nbetween Clusters") +
       ggtitle(label = qq("@{toupper(which_dat)}, @{dname_title}")) 
     return(diffe_g)
   }

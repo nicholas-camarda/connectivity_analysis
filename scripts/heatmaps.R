@@ -750,10 +750,6 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   color_fc_border_row_labels <- color_fc_row_labels_df %>% .$border_color
   color_fc_border_row_thickness <- color_fc_row_labels_df %>% .$border_thickness
   
-  
-  # analytes_reordered_df <- row_order_df %>%
-  #   mutate(new_analyte_label = ifelse(signif_and_fold, str_c(analyte, " **"), analyte)) 
-  
   # change the way the analyte is represented
   analytes_reordered <- row_order_df$analyte
   if (which_dat == "gcp") {
