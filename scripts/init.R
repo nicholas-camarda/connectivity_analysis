@@ -5,10 +5,11 @@ library(ggsci)
 library(ggpubr)
 library(ggforce)
 library(scales)
-library(tidymodels)
+# library(tidymodels)
+library(wesanderson) # only for color palette
 
-library(xml2)
-library(XML)
+# library(xml2)
+# library(XML)
 
 library(RColorBrewer)
 library(randomcoloR)
@@ -57,7 +58,8 @@ set.seed(25)
 # specific_data_directory <- "test"
 specific_data_directory <- "All-LINCS-data-LVL4"
 # args_fn_name <- "vascular_args.csv"
-args_fn_name <- "all_args.csv"
+# args_fn_name <- "all_args.csv"
+args_fn_name <- "test_args.csv"
 
 
 ## progress bar ##

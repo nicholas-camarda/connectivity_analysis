@@ -131,6 +131,10 @@ read_and_summarize_data <- function(l, dtype_) {
              pr_gene_symbol = mark) %>% 
       dplyr::select(master_id, replicate_id, column_id, 
                     row_id, value, pr_gene_symbol, mark, everything())
+    
+    write_tsv(res_temp %>% distinct(pr_gene_symbol, pr_gcp_histone_mark), 
+              file = file.path(data_directory, "GCP-genes_with_marks_and_peptides.tsv"))
+    
   } else {
     
     # This needs to be modified - I am seeing duplicate entries!!!
@@ -143,6 +147,9 @@ read_and_summarize_data <- function(l, dtype_) {
                                                        sep = ""), 
                                                  sep = "_")) %>%
       ungroup(); unique_gene_names_df
+    
+    write_tsv(unique_gene_names_df, 
+              file = file.path(data_directory, "P100-genes_with_phospho_marks_and_peptides.tsv"))
     
     res_temp2 <- res_temp %>%
       rename(mark = pr_p100_phosphosite) %>%

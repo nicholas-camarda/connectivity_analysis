@@ -345,10 +345,13 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   
   reduced_tbl <- reduced_long %>%
     group_by(analytes, cell_id, pert_iname) %>%
-    summarize(median_value = median(value, na.rm = T), .groups = "keep") %>%
+    # is this going to cuase issues??s
+    # summarize(median_value = median(value, na.rm = T), .groups = "keep") %>%
+    summarize(mean_value = mean(value, na.rm = T), .groups = "keep") %>%
     ungroup() %>%
     mutate(u_cell_id = str_c(cell_id, pert_iname, sep = "::")) %>%
-    pivot_wider(id_cols = analytes, names_from = u_cell_id, values_from = median_value)
+    # pivot_wider(id_cols = analytes, names_from = u_cell_id, values_from = median_value)
+    pivot_wider(id_cols = analytes, names_from = u_cell_id, values_from = mean_value)
   
   reduced_mat <- reduced_tbl %>% dplyr::select(-analytes) %>% as.matrix()
   rownames(reduced_mat) <- analytes_
@@ -370,14 +373,21 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
     )
   )
   # set color breaks at quantiles
-  # c(0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95)
-  qnts <- c(0.025, 0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95, 0.975)
+  # qnts <- seq(0, 1, 0.125)
+  qnts <- c(0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95)
+  # qnts <- c(0.025, 0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95, 0.975)
+  # qnts <- c(0.001, 0.025, 0.05, 0.10, 0.50, 0.90, 0.95, 0.975, 0.999)
+  # qnts <- c(0.05, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.95)
   #  c(0.001, 0.025, 0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95, 0.975, 0.999)
   # qnts <- c(0.001, 0.025, 0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95, 0.975, 0.999)
+  # palette_colors <- diverge_hcl(n = length(qnts), h = c(260, 0), c = 81, l = c(30, 90), power = 1.5)
+  # palette_colors <- wes_palette("Zissou1", length(qnts), type = "continuous")
+  
   breaks <- sapply(rev(qnts), function(q) quantile(reduced_mat, q, na.rm = T, names = F))
-  col_fun <- colorRamp2(breaks = breaks, colors = brewer.pal(n = length(breaks), name = "RdYlBu"))
+  palette_colors <- brewer.pal(n = length(breaks), name = "RdYlBu")
+  col_fun <- colorRamp2(breaks = breaks, colors = palette_colors)
   
-  
+  # stop()
   # in the order of the grouping -> we need to adjust colors depending on group content
   # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-gcp-heat.RData")
   # load("debug/debug_dat/debug-gcp-heat.RData")
@@ -531,8 +541,6 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
     mutate(moa_simple = ifelse(is.na(moa_simple), "", moa_simple)) %>%
     distinct()
   
-  which_dat
-  
   link_moa_to_pert <- tibble(pert_iname = perturbations_char_vec_temp) %>%
     left_join(extra_pert_info, by = "pert_iname") %>%
     rename(pert_iname_temp = pert_iname) %>%
@@ -637,7 +645,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   
   
   # save(list = ls(all.names = TRUE),
-  #            file = "debug/debug_dat/debug-duplicate-analytes.RData")
+  #            file = "debug/debug_dat/debug-p100.RData")
   # stop()
   
   # get top up and down
@@ -921,8 +929,8 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   length(analytes_reordered)
   length(grp_color_df$unique_id)
   
-  reordered_mat_temp <- reduced_mat[analytes_reordered, grp_color_df$unique_id, drop = F]
-  reordered_mat <- apply(reordered_mat_temp, 2, FUN = as.numeric)
+  reordered_mat <- reduced_mat[analytes_reordered, grp_color_df$unique_id, drop = F]
+  # reordered_mat <- apply(reordered_mat_temp, 2, FUN = as.numeric)
   
   
   
@@ -995,6 +1003,31 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   ht_opt$ROW_ANNO_PADDING <- unit(1, "mm")
   ht_opt$annotation_border <- TRUE
   
+  # this IS the same as matrix_for_diffe, which is what differential analytes is computed on
+  # t2_reduced_long_ <- reduced_long %>% 
+  #   filter(analytes == "pS12 EIF4A3") %>%
+  #   arrange(cell_id) %>%
+  #   pluck("value")
+  
+  # check incoming matrix
+  long_mat_for_check <- reordered_mat %>%
+    as_tibble() %>%
+    mutate(analyte = analytes_reordered) %>% # to include the phosphosite or extra info
+    pivot_longer(colnames(reordered_mat), names_to = "cell_drug") %>%
+    separate(cell_drug, into = c("cell_id", "pert_iname"), sep = "::") %>%
+    left_join(grp_color_df %>% dplyr::select(cell_id, cluster), by = "cell_id") 
+  
+  median_df <- long_mat_for_check %>%
+    filter(analyte == "pS12 EIF4A3") %>%
+    mutate(helper_cluster = ifelse(cluster == 2, 1, 0)) %>%
+    group_by(helper_cluster) %>%
+    arrange(cell_id)
+  
+ summarized_median_df <- median_df %>% 
+    summarize(clust_median_val = median(value, na.rm = TRUE), .groups = "keep"); summarized_median_df
+  
+  2^(summarized_median_df$clust_median_val[2] - summarized_median_df$clust_median_val[1])
+  
   ht <- Heatmap(reordered_mat,
                 name = NAME,
                 col = col_fun,
@@ -1040,7 +1073,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
                 raster_device = "png",
                 rect_gp = gpar(col = "white", lwd = 0.7)) # outline heatmap with black line
   
-  # draw(ht)
+  draw(ht)
   # legend for cell lines
   
   lgd_cluster <- Legend(labels = group_order, 

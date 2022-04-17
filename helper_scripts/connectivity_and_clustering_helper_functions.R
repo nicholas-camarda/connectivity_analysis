@@ -401,14 +401,10 @@ run_diffe <- function(dat, cob, dname) {
   which_dat <- unique(force_natural(dat$which_dat))
   message(qq("Computting differential expression on @{dname}, @{which_dat}"))
   
-  mat_tbl <- dat %>%
-    dplyr::select(replicate_id, cell_id, pert_iname, pert_class, pr_gene_symbol, value) %>%
-    ungroup()
-  
-  clust_assignments <- cob$cluster_assignments
+  clust_assignments <- cob$cluster_assignments; clust_assignments
   # join clusters and annotations
   ca_df_temp <- create_ca_df(ca = clust_assignments) %>%
-    rename(base_clust_comp = cluster)
+    rename(base_clust_comp = cluster); ca_df_temp
   
   # get cluster labels
   clust_label_df <- ca_df_temp %>%
@@ -424,56 +420,71 @@ run_diffe <- function(dat, cob, dname) {
   
   ca_df <- left_join(ca_df_temp, clust_label_df, by = "base_clust_comp"); ca_df
   
+  # assign the clustering details to the original dataset, with a new name now
   dat_ <- dat %>%
     left_join(ca_df, by = c("cell_id"))
   
-  clusts_int_vec <- clust_label_df$base_clust_comp
   
-  matrix_for_diffe <- mat_tbl %>%
-    left_join(ca_df, by = "cell_id") %>%
+  mat_tbl <- dat_ %>%
     dplyr::select(
       replicate_id, cell_id, pert_iname, pert_class,
       base_clust_comp, base_clust_comp_name, value, pr_gene_symbol
     ) %>%
+    ungroup(); mat_tbl
+  
+  # pivote wider such that rows are observations and columns are analytes, with some metadata
+  matrix_for_diffe <- mat_tbl %>%
     pivot_wider(
       names_from = pr_gene_symbol,
       values_from = value,
-      values_fn = median
-    ) # need this in case dups with different values
+      values_fn = median # need this in case dups with different values, which there shouldn't be but...
+    ) ; matrix_for_diffe
   
   feature_names <- dat_ %>%
     ungroup() %>%
     .$pr_gene_symbol %>%
-    unique()
+    unique(); feature_names
   
   p2 <- progressr::progressor(steps = length(clusts_int_vec) * length(feature_names))
   
+  #' *note* this t1_mat IS the same as reduced_long, which is used in heatmaps to plot the raw data 
+  #' (ultimately median transformed, which i'm investigating)
+  
+  # t1_mat_for_diffe <- matrix_for_diffe %>% 
+  #   group_by(cell_id, pert_iname, base_clust_comp, base_clust_comp_name) %>%
+  #   arrange(cell_id) %>% 
+  #   pluck("pS12 EIF4A3")
+  # %>% 
+  #   summarize(median_ = median(`pS12 EIF4A3`, na.rm= TRUE))
+  # use this to loop through clusters
+  
+  clusts_int_vec <- clust_label_df$base_clust_comp; clusts_int_vec
+  
   message("Computing differential analytes..")
   diffe_by_clust_df <- map_df(clusts_int_vec, function(ith_cluster) {
-    # ith_cluster <- clusts_int_vec[1]
+    # ith_cluster <- clusts_int_vec[2]
     
     base_clust_comp_name <- clust_label_df %>%
-      dplyr::select(base_clust_comp, base_clust_comp_name) %>% # take the correct cluster naming convention column
       filter(base_clust_comp == ith_cluster) %>% # take the correct name according to the cluster integer
       distinct(base_clust_comp_name) %>% # non-vascular clusters need to get lumped together, we just want the unique cluster assign
-      pluck(1) # make it a character vector
+      pluck(1) ; base_clust_comp_name# make it a character vector
     
     message(str_c("\nCluster ID:", ith_cluster, "\n#", base_clust_comp_name, sep = " "))
     p2()
     
     cluster_res <- map2_df(feature_names, ith_cluster, function(k, i) {
-      # k <- feature_names[42]; i <- ith_cluster[1]
+      # k <- feature_names[35]; i <- ith_cluster
       # DEBUG:
       # message(k)
       
       c1 <- matrix_for_diffe %>%
         filter(base_clust_comp == i) %>%
-        pluck(k)
+        pluck(k); c1
       
       c2 <- matrix_for_diffe %>%
         filter(base_clust_comp != i) %>%
-        pluck(k)
-
+        pluck(k); c2
+      
       n_non_na_vec1 <- length(c1[!is.na(c1)]); n_non_na_vec1
       n_non_na_vec2 <- length(c2[!is.na(c2)]); n_non_na_vec2
       
@@ -517,14 +528,16 @@ run_diffe <- function(dat, cob, dname) {
       #' @note assumes data are already log transformed!!!
       #' So a fold change is simply a difference, not a division!!
       #' is this the correct way to calculate diffex??
-    
       
-      logfc <- median(c1, na.rm = T) - median(c2, na.rm = T)
+      c1_median <- median(c1, na.rm = T); c1_median
+      c2_median <- median(c2, na.rm = T); c2_median
+      logfc <- c1_median - c2_median; logfc
+      
       # logfc <- mean(c1, na.rm = TRUE) - mean(c2, na.rm = TRUE)
       d_stat <- ifelse(logfc > 0, "++", "--")
       
-      min_x <- min(c(min(c1, na.rm = T), min(c2, na.rm = T)))
-      max_x <- max(c(max(c1, na.rm = T), max(c2, na.rm = T)))
+      # min_x <- min(c(min(c1, na.rm = T), min(c2, na.rm = T))); min_x
+      # max_x <- max(c(max(c1, na.rm = T), max(c2, na.rm = T))); max_x
       
       c1_names_df <- matrix_for_diffe %>%
         filter(base_clust_comp == i) %>%
@@ -656,7 +669,7 @@ plot_diffe_results <- function(args){
   #' *DECIDE WHETHER TO USE MEAN OR MEDIAN* - here we're using median if comments are active
   diffe_final_res <- diffe_final_res # %>% mutate(fc = mean_fc) # for mean
   signif_df_final <- signif_df # %>% mutate(fc = mean_fc) # for mean
-    
+  
   sig_up_df <- signif_df_final %>% 
     filter(neg_log10_p_val_bh >= 1 & 
              (fc >= FC_UPPER_BOUND))
@@ -800,9 +813,9 @@ plot_diffe_results <- function(args){
       return(r)
     })) %>% 
     filter(keep_); new_sig
-    # mutate(vascular_str_name_idx = str_locate(base_clust_comp_name, pattern = "HUVEC|HAoSMC"),
-    #        keep_ = ifelse(!is.na(vascular_str_name_idx), T, F)) %>%
-    # dplyr::filter(keep_)
+  # mutate(vascular_str_name_idx = str_locate(base_clust_comp_name, pattern = "HUVEC|HAoSMC"),
+  #        keep_ = ifelse(!is.na(vascular_str_name_idx), T, F)) %>%
+  # dplyr::filter(keep_)
   groups <- unique(new_main$base_clust_comp_name)
   
   # stop()
