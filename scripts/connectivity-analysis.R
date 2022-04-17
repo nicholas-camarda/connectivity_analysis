@@ -18,25 +18,13 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   exclude_msg <- ifelse(exclude == "", "Nothing", exclude)
   message("Excluding: ", exclude_msg)
   
-  # this is convenient to filter the drugs out here...
-  # but probably not the most intelligent design
-  # need to filter out by group of analysis, e.g. per kinase inhibitor, per epigenetics, etc
-  # drugs_to_plot_df <- my_obj %>%
-  #   filter(!is.na(value)) %>%
-  #   dplyr::select(cell_id, pert_iname, value) %>%
-  #   pivot_wider(id_cols = pert_iname, names_from = cell_id, 
-  #               values_from = value, 
-  #               values_fn = median) %>%
-  #   na.omit() 
-  # my_perts <- drugs_to_plot_df$pert_iname
-  
-   HUVEC_HAoSMC_perts <- my_obj %>%
+  HUVEC_HAoSMC_perts <- my_obj %>%
     filter(cell_id %in% vascular_char_vec) %>%
     ungroup() %>%
     dplyr::select(pert_iname) %>%
     .$pert_iname %>%
     unique()
-
+  
   other_perts <- my_obj %>%
     ungroup() %>%
     filter(!(cell_id %in% vascular_char_vec)) %>%
@@ -315,7 +303,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
                                     FUN = function(l) l)) %>% 
     distinct(pert_iname, pert_class) %>%
     mutate(pert_class = str_split(pert_class, "_excl_", simplify = TRUE)[,1])
-
+  
   drug_dose_info_df <- my_obj %>% 
     ungroup() %>%
     distinct(cell_id, pert_iname, pert_class, pert_dose, pert_dose_unit, det_plate) %>% 
@@ -333,7 +321,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   write_tsv(drug_dose_info_df, file = drug_dose_info_fn_name)
   write_tsv(drug_dose_info_df_distinct, file = drug_dose_info_fn_name_distinct)
   
-
+  
   message("Done with that batch!\n")
   
   return(list(my_dendro_obj, my_heatmap_obj, my_diffe_obj, res_paths_tbl) %>% setNames(c("dendro_res","heatmap_res", "diffe_res", "cache")))

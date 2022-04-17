@@ -565,12 +565,12 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
       str_c(str_trim(s, side = "both"), collapse = " ")})) %>%
     mutate(new_lbs = map2_chr(cell_id, new_lbs, .f = function(s, y) {
       res <- ifelse(str_detect(string = s, pattern = "HAoSMC"), 
-                            str_c(s, " (vascular SMC)", collapse = ""), 
-                            ifelse(str_detect(string = s, pattern = "HUVEC"), 
-                                   str_c(s, " (vascular EC)", collapse = ""), 
-                                   y))
+                    str_c(s, " (vascular SMC)", collapse = ""), 
+                    ifelse(str_detect(string = s, pattern = "HUVEC"), 
+                           str_c(s, " (vascular EC)", collapse = ""), 
+                           y))
       return(res)
-      })) %>%
+    })) %>%
     left_join(grp_colors, by = "cell_id") %>%
     mutate(color = ifelse(is.na(color), "#b6b6b6", color)) # grayish color for NA
   col_fun_annot3 <- cell_color_df$cell_individual_color # 1st group being closest to the labels on the right
@@ -654,8 +654,11 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   row_order_df <- bind_rows(top_up, top_down)
   row_order_df
   
-  setdiff(rownames(filtered_test_mat), row_order_df$analyte)
-  setdiff(row_order_df$analyte,rownames(filtered_test_mat))
+  matrix_analyte_check <- sort(rownames(filtered_test_mat))
+  row_order_analyte_check <- sort(row_order_df$analyte)
+  setdiff(matrix_analyte_check, row_order_analyte_check)
+  setdiff(row_order_analyte_check, matrix_analyte_check)
+  
   stopifnot(nrow(row_order_df) == nrow(filtered_test_mat))
   
   # annotations for right side (by row)
@@ -751,15 +754,20 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   # analytes_reordered_df <- row_order_df %>%
   #   mutate(new_analyte_label = ifelse(signif_and_fold, str_c(analyte, " **"), analyte)) 
   
-  analytes_reordered_labels <- str_split(row_order_df$analyte, "_", simplify = TRUE)[,1]
+  # change the way the analyte is represented
   analytes_reordered <- row_order_df$analyte
-  
   if (which_dat == "gcp") {
     analytes_reordered_labels <- row_order_df %>% 
       left_join(mod_table, by = c("analyte" = "full_sites")) %>%
       mutate(new_analyte_label = mod_counts) %>%
       .$new_analyte_label
+  } else {
+    analytes_reordered_labels <- str_split(string = gsub(x = row_order_df$analyte, 
+                                                         pattern = "_1", replacement = "*"), 
+                                           pattern = " ",simplify = TRUE)[,2] 
   }
+  
+  
   if (add_D_stat & which_dat == "gcp") {
     # add d-stat, no site
     right_ha <- HeatmapAnnotation(
@@ -907,7 +915,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
       gap = unit(1.5, "mm") # gap between annotations
     )
   }
- 
+  
   
   
   # reorder the matrix with this -- this could also be done in the heatmap function;
@@ -984,7 +992,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   # )
   # draw(left_ha)
   # 
-
+  
   
   ht_opt$message = FALSE
   ht_opt$COLUMN_ANNO_PADDING <- unit(2, "mm")
@@ -1106,7 +1114,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
         )
       })
     }
-
+    
     # decorate_annotation("bar", {
     #   # grid.text("barplot", unit(-10, "mm"), just = "bottom", rot = 90)
     #   grid.lines(y=c(0, 1), unit(c(1, 1), "native"), 

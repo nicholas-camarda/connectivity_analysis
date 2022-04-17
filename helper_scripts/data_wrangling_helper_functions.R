@@ -96,12 +96,15 @@ find_duplicates <- function(tbl) {
 read_and_summarize_data <- function(l, dtype_) {
   # l <- my_data_lst[[1]]; dtype_ = "GCP"
   # l <- my_data_lst[[2]]; dtype_ = "P100"
+  # message(dtype_)
   res_temp <- data.table::rbindlist(l$data, fill = TRUE, use.names = TRUE) %>% 
     as_tibble() %>%
-    mutate(which_dat = dtype_,
-           cell_id = ifelse(cell_id == "Pericytes", "Pericyte", cell_id),
-           pert_iname = tolower(pert_iname),
-           det_normalization_group_vector = as.character(det_normalization_group_vector),
+    mutate(which_dat = dtype_) %>%
+    mutate(cell_id = ifelse(cell_id == "Pericytes", "Pericyte", cell_id),
+           pert_iname = tolower(pert_iname)) %>%
+    # do not include MCF10A
+    dplyr::filter(cell_id != "MCF10A") %>%
+    mutate(det_normalization_group_vector = as.character(det_normalization_group_vector),
            pert_iname = ifelse(pert_iname == "dmso", toupper(pert_iname), pert_iname)) %>%
     ## inner join to only do drugs that I pick!!
     left_join(drugs_moa_df, by = "pert_iname") %>%
@@ -115,9 +118,7 @@ read_and_summarize_data <- function(l, dtype_) {
     mutate(replicate_id = str_c(master_id, column_id, det_plate,  sep = "::")) %>%
     dplyr::select(master_id, replicate_id, everything()) %>%
     # group_by(replicate_id, pr_gene_symbol) %>%
-    distinct(replicate_id, pr_gene_symbol, value, .keep_all = TRUE) %>%
-    # do not include MCF10A
-    filter(cell_id != "MCF10A")
+    distinct(replicate_id, pr_gene_symbol, value, .keep_all = TRUE) 
   message("Removed MCF10A cells...")
 
   if ("pr_gcp_histone_mark" %in% colnames(res_temp)) {
@@ -136,9 +137,11 @@ read_and_summarize_data <- function(l, dtype_) {
     unique_gene_names_df <- res_temp %>% 
       ungroup() %>% 
       distinct(pr_gene_symbol, pr_p100_phosphosite, pr_p100_modified_peptide_code) %>% 
-      group_by(pr_gene_symbol) %>%
-      mutate(pr_gene_symbol_u = make.unique(pr_gene_symbol, "_")) %>%
       rename(mark = pr_p100_phosphosite) %>% 
+      # group_by(pr_gene_symbol, pr_p100_phosphosite) %>%
+      mutate(pr_gene_symbol_u = make.unique(str_c("p", str_c(mark, pr_gene_symbol, sep = " "), 
+                                                       sep = ""), 
+                                                 sep = "_")) %>%
       ungroup(); unique_gene_names_df
     
     res_temp2 <- res_temp %>%
@@ -153,10 +156,6 @@ read_and_summarize_data <- function(l, dtype_) {
                     value, pr_gene_symbol, mark, everything()) 
     
   }
-
-  final_res <- res %>%
-    # these two filter steps FIRST!
- 
   
   # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-summary.RData")
   # load("debug/debug_dat/debug-summary.RData")

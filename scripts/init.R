@@ -19,7 +19,7 @@ library(colorspace)
 # if (!requireNamespace("BiocManager", quietly = TRUE))
 #   install.packages("BiocManager")
 # BiocManager::install(version = "3.13")
-# BiocManager::install(c("ComplexHeatmap", "cmapR", "circlize", "BiocParrellel"))
+# BiocManager::install(c("ComplexHeatmap", "cmapR", "circlize"))
 # BiocManager::install(c("cmapR"))
 library(cmapR)
 library(circlize)
@@ -27,11 +27,11 @@ library(ComplexHeatmap)
 # library(BiocParallel)
 
 # for seg fault issues.. https://issueexplorer.com/issue/wch/extrafont/89
-library(extrafont)
+# library(extrafont)
 # do this once
 # font_import()
 # loadfonts(device="postscript")
-fonts()
+# fonts()
 
 
 # clustering
@@ -233,8 +233,6 @@ my_data_obj_final <- tibble(
               .f = read_and_summarize_data
   )
 )
-
-P100 <- read_and_summarize_data(my_data_lst, "P100")
 
 # grab drugs from BOTH P100 and GCP
 my_temp_obj <- bind_rows(my_data_obj_final$data) %>%

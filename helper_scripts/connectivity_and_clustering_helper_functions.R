@@ -394,13 +394,6 @@ run_diffe_lst <- function(lst, clust_lst) {
 #' @param cob list obj containing results of clustering analysis
 #' @param dname grouping_var, e.g. Kinase inhibitor or dmso, for naming the plot
 run_diffe <- function(dat, cob, dname) {
-  # dat <- lst$`Kinase inhibitor`; cob <- clust_lst$`Kinase inhibitor`; dname <- "Kinase inhibitor";
-  
-  # base_output_dir <- lst$data
-  # which_dat <- "P100"
-  
-  
-
   # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-diffe.RData")
   # load("debug/debug_dat/debug-diffe.RData")
   # stop()
@@ -597,7 +590,6 @@ run_diffe <- function(dat, cob, dname) {
   
   stopifnot(nrow(diffe_by_clust_df) > 0)
   
-  
   phosphosite_meta <- dat_ %>%
     ungroup() %>%
     dplyr::distinct(pr_gene_symbol, pr_gene_id, mark) %>%
@@ -615,15 +607,19 @@ run_diffe <- function(dat, cob, dname) {
                                     ifelse(signif & (fc < FC_LOWER_BOUND), TRUE, FALSE)
     )) 
   
-  if (tolower(which_dat) == "p100") {
-    diffe_final_res <- diffe_final_res_temp %>% 
-      mutate(label_ = str_c("p", str_c(mark, analyte, sep = " "), sep = "")) %>%
-      dplyr::select(signif_and_fold, signif, logFC, fc, everything())
-  } else {
-    diffe_final_res <- diffe_final_res_temp %>% 
-      mutate(label_ = analyte) %>%
-      dplyr::select(signif_and_fold, signif, logFC, fc, everything())
-  }
+  diffe_final_res <- diffe_final_res_temp %>% 
+    mutate(label_ = analyte) %>%
+    dplyr::select(signif_and_fold, signif, logFC, fc, everything())
+  
+  # if (tolower(which_dat) == "p100") {
+  #   diffe_final_res <- diffe_final_res_temp %>% 
+  #     mutate(label_ =  str_c("p", str_c(mark, pr_gene_symbol, sep = " "), sep = "")) %>%
+  #     dplyr::select(signif_and_fold, signif, logFC, fc, everything())
+  # } else {
+  #   diffe_final_res <- diffe_final_res_temp %>% 
+  #     mutate(label_ = analyte) %>%
+  #     dplyr::select(signif_and_fold, signif, logFC, fc, everything())
+  # }
   
   signif_df <- diffe_final_res %>%
     filter(signif_and_fold)
