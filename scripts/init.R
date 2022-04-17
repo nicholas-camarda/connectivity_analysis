@@ -28,11 +28,11 @@ library(ComplexHeatmap)
 # library(BiocParallel)
 
 # for seg fault issues.. https://issueexplorer.com/issue/wch/extrafont/89
-# library(extrafont)
+library(extrafont)
 # do this once
 # font_import()
 # loadfonts(device="postscript")
-# fonts()
+fonts()
 
 
 # clustering
@@ -58,8 +58,8 @@ set.seed(25)
 # specific_data_directory <- "test"
 specific_data_directory <- "All-LINCS-data-LVL4"
 # args_fn_name <- "vascular_args.csv"
-# args_fn_name <- "all_args.csv"
-args_fn_name <- "test_args.csv"
+args_fn_name <- "all_args.csv"
+# args_fn_name <- "test_args.csv"
 
 
 ## progress bar ##

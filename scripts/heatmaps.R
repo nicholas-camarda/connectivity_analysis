@@ -983,7 +983,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   length(grp_color_df$unique_id)
   
   ### ORDER HERE!!! ###
-  reordered_mat <- reduced_mat[order(analytes_reordered), order(grp_color_df$unique_id), drop = F]
+  reordered_mat <- reduced_mat[analytes_reordered, grp_color_df$unique_id, drop = F]
   # reordered_mat <- apply(reordered_mat_temp, 2, FUN = as.numeric)
   
   

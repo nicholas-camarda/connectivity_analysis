@@ -779,7 +779,6 @@ plot_diffe_results <- function(args){
         col = "orange", linetype = 6,
       ) +
       geom_label_repel(to_plot_signif_df_final %>% 
-                         na.omit() %>%
                          filter(neg_log10_p_val_bh >= 1 & 
                                   (fc >= FC_UPPER_BOUND)),
                        mapping = aes(x = fc, y = neg_log10_p_val_bh, 
@@ -807,7 +806,7 @@ plot_diffe_results <- function(args){
                        ylim = c(0, max_y_lim+1),
                        arrow = arrow(length = unit(0.0075, "npc"))) +
       
-      geom_label_repel(to_plot_signif_df_final %>% na.omit() %>%
+      geom_label_repel(to_plot_signif_df_final %>%
                          filter(neg_log10_p_val_bh >= 1 & 
                                   (fc <= FC_LOWER_BOUND)),
                        mapping = aes(x = fc, y = neg_log10_p_val_bh,
