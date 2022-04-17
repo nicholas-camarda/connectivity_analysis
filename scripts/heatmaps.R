@@ -126,8 +126,8 @@ plot_heatmap <- function(args) {
                                -1 * ks_boot_statistic, 
                                ks_boot_statistic))
   
-  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-p100-heat-pre.RData")
-  # load("debug/debug_dat/debug-p100-heat-pre.RData")
+  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-p100-pre-heat.RData")
+  # load("debug/debug_dat/debug-p100-pre-heat.RData")
   # stop()
   
   
@@ -182,19 +182,23 @@ plot_heatmap <- function(args) {
       row_annots_df_include_nonsig_all,
       str_detect(string = base_clust_comp_name, pattern = "HUVEC"), signif
     ); row_annots_df1
+    
     row_annots_df2 <- filter(
       row_annots_df_include_nonsig_all,
       str_detect(string = base_clust_comp_name, pattern = "HAoSMC"), signif
     ); row_annots_df2
     
-    # get the character vector of the cluster name
-    bccn1_char_vec <- str_extract(string = unique(row_annots_df1$base_clust_comp_name),
-                                  pattern = "HUVEC")
-    bccn2_char_vec <- str_extract(string = unique(row_annots_df2$base_clust_comp_name), 
-                                  pattern = "HAoSMC")
     
+    # get the 'vasc-centric' character vector of the cluster name, i.e. just HUVEC, or HAoSMC
+    bccn1_char_vec <- str_extract(string = unique(row_annots_df1$base_clust_comp_name),
+                                  pattern = "HUVEC"); bccn1_char_vec
+    bccn2_char_vec <- str_extract(string = unique(row_annots_df2$base_clust_comp_name), 
+                                  pattern = "HAoSMC"); bccn2_char_vec
+    
+    # this will be the full cluster name, i.e. A375, HUVEC, YAPC
     cell_id_huvec_clust_char_vec <- as.character(unique(str_split(unique(row_annots_df1$base_clust_comp_name), ",", simplify = T)))
     cell_id_huvec_clust_char_vec
+    
     cell_id_haosmc_clust_char_vec <- as.character(unique(str_split(unique(row_annots_df2$base_clust_comp_name), ",", simplify = T)))
     cell_id_haosmc_clust_char_vec
     
@@ -202,7 +206,7 @@ plot_heatmap <- function(args) {
       mutate(
         group = ifelse(cell_id %in% vascular_char_vec, cell_id, "Non-vascular"),
         cluster_name = ifelse(cell_id %in% cell_id_huvec_clust_char_vec, bccn1_char_vec,
-                              ifelse(cell_id %in% bccn2_char_vec, bccn2_char_vec, "Non-vascular")
+                              ifelse(cell_id %in% cell_id_haosmc_clust_char_vec, bccn2_char_vec, "Non-vascular")
         ),
         which_dat = dataset,
         grp_fac = factor(cluster_name,
@@ -217,11 +221,40 @@ plot_heatmap <- function(args) {
                               drop = F
     ]
     
+    #' #' @CHECK check og table
+    #' dat_tbl %>%
+    #' filter(cell_id == "HUVEC", pr_gene_symbol == "pS12 EIF4A3") %>%
+    #'   mutate(median_value = median(value, na.rm = TRUE)) %>%
+    #'   dplyr::select(pr_gene_symbol, cell_id, value, median_value)
+    #' 
+    #' #' @CHECK check mat
+    #' mat %>%
+    #'   rownames_to_column() %>%
+    #'   rename(analyte = rowname) %>%
+    #'   as_tibble() %>%
+    #'   pivot_longer(cols = colnames(.)[-1], names_to = 'joint') %>%
+    #'   separate(col = joint, into = c("joint2","replicate_id", "plate_id"), sep = "::") %>%
+    #'   separate(col = joint2, into = c("cell_id", "pert_iname","pert_class")) %>%
+    #'   filter(cell_id == "HUVEC", analyte == "pS12 EIF4A3") %>%
+    #'   mutate(median_value = median(value, na.rm = TRUE))
+    #' 
+    #' #' @CHECK check filtered_mat
+    #' filtered_test_mat1 %>%
+    #'  rownames_to_column() %>%
+    #'   rename(analyte = rowname) %>%
+    #'   as_tibble() %>%
+    #'   pivot_longer(cols = colnames(.)[-1], names_to = 'joint') %>%
+    #'   separate(col = joint, into = c("joint2","replicate_id", "plate_id"), sep = "::") %>%
+    #'   separate(col = joint2, into = c("cell_id", "pert_iname","pert_class")) %>%
+    #'   filter(cell_id == "HUVEC", analyte == "pS12 EIF4A3") %>%
+    #'   mutate(median_value = median(value, na.rm = TRUE))
+    
+    
     column_annots_df2 <- column_annots_df_temp %>%
       mutate(
         group = ifelse(cell_id %in% vascular_char_vec, cell_id, "Non-vascular"),
         cluster_name = ifelse(cell_id %in% cell_id_huvec_clust_char_vec, bccn1_char_vec,
-                              ifelse(cell_id %in% bccn2_char_vec, bccn2_char_vec, "Non-vascular")
+                              ifelse(cell_id %in% cell_id_haosmc_clust_char_vec, bccn2_char_vec, "Non-vascular")
         ),
         which_dat = dataset,
         grp_fac = factor(cluster_name, levels = c("Non-vascular", bccn1_char_vec, bccn2_char_vec))
@@ -233,6 +266,7 @@ plot_heatmap <- function(args) {
                               colnames(mat) %in% column_annots_df2$u_cell_id, 
                               drop = F]
     
+    # name the output FNs
     split_fn <- str_split(heatmap_output_fn, "\\.", simplify = T)
     heatmap_output_fn1 <- str_c(split_fn[, 1], qq("-@{bccn1_char_vec}."), split_fn[, 2], collapse = "")
     heatmap_output_fn2 <- str_c(split_fn[, 1], qq("-@{bccn2_char_vec}."), split_fn[, 2], collapse = "")
@@ -240,14 +274,18 @@ plot_heatmap <- function(args) {
     # stop()
     ht1_lst <- organize_and_plot_heatmap_subfunction(base_cell_id = "HUVEC",
                                                      filtered_test_mat = filtered_test_mat1,
-                                                     row_annots_df = row_annots_df1, column_annots_df = column_annots_df1,
-                                                     heatmap_output_fn = heatmap_output_fn1, title_var = grouping_var
+                                                     row_annots_df = row_annots_df1, 
+                                                     column_annots_df = column_annots_df1,
+                                                     heatmap_output_fn = heatmap_output_fn1, 
+                                                     title_var = grouping_var
     )
     
     ht2_lst <- organize_and_plot_heatmap_subfunction(base_cell_id = "HAoSMC",
                                                      filtered_test_mat = filtered_test_mat2,
-                                                     row_annots_df = row_annots_df2, column_annots_df = column_annots_df2,
-                                                     heatmap_output_fn = heatmap_output_fn2, title_var = grouping_var
+                                                     row_annots_df = row_annots_df2, 
+                                                     column_annots_df = column_annots_df2,
+                                                     heatmap_output_fn = heatmap_output_fn2, 
+                                                     title_var = grouping_var
     )
     
     return(list(
@@ -320,11 +358,25 @@ calc_ht_size <- function(ht, unit = "inches") {
 
 #' @note helper function for plotting heatmaps
 organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA, 
-                                                  filtered_test_mat,
-                                                  row_annots_df, column_annots_df,
-                                                  heatmap_output_fn, title_var = "pert_iname",
+                                                  filtered_test_mat = NA,
+                                                  row_annots_df = NA, column_annots_df = NA,
+                                                  heatmap_output_fn = NA, title_var = NA,
                                                   plot_cluster_bar = FALSE,
                                                   add_D_stat = FALSE) {
+  message("Plotting for: ", base_cell_id)
+  # stop()
+  # check- this matches 
+  # filtered_test_mat["pS12 EIF4A3",
+  #                   grep(pattern = "HUVEC", x = colnames(filtered_test_mat)),
+  #                   drop = F] %>%
+  #   as.matrix() %>%
+  #   Heatmap(cluster_rows = FALSE, cluster_columns = FALSE)
+  # filtered_test_mat["pS12 EIF4A3",
+  #                   grep(pattern = "HUVEC", x = colnames(filtered_test_mat)),
+  #                   drop = F] %>%
+  #   as.matrix() %>% 
+  #   rowMedians(na.rm = TRUE)
+  
   
   analytes_ <- rownames(filtered_test_mat)
   u_cell_id_ <- colnames(filtered_test_mat)
@@ -332,26 +384,23 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
     dplyr::distinct(cluster, cell_id, pert_iname, cluster_name, grp_fac) ; 
   
   # message(tail(cluster_ids))
-  
   reduced_long <- filtered_test_mat %>% 
+    rownames_to_column() %>%
+    rename(analytes = rowname) %>%
     as_tibble() %>%
-    rownames_to_column(var = "temp") %>%
-    bind_cols(tibble(analytes = analytes_)) %>%
-    dplyr::select(analytes, everything(), -temp) %>%
-    pivot_longer(all_of(u_cell_id_), names_to = "u_cell_id") %>%
-    separate(col = all_of(u_cell_id), into = c("cell_id", "pert_iname", "pert_class_and_batch"), sep = "--") %>%
-    separate(col = pert_class_and_batch, into = c("pert_class", "replicate", "plate_id"), sep = "::") %>%
+    pivot_longer(cols = colnames(.)[-1], names_to = 'joint') %>%
+    separate(col = joint, into = c("joint2","replicate_id", "plate_id"), sep = "::") %>%
+    separate(col = joint2, into = c("cell_id", "pert_iname","pert_class"))  %>%
     left_join(cluster_ids, by = c("cell_id", "pert_iname"))
-  
+
   reduced_tbl <- reduced_long %>%
-    group_by(analytes, cell_id, pert_iname) %>%
-    # is this going to cuase issues??s
-    # summarize(median_value = median(value, na.rm = T), .groups = "keep") %>%
-    summarize(mean_value = mean(value, na.rm = T), .groups = "keep") %>%
+    group_by(analytes, cell_id, pert_iname, cluster) %>%
+    summarize(median_value = median(value, na.rm = T), .groups = "keep") %>%
+    # summarize(mean_value = mean(value, na.rm = T), .groups = "keep") %>%
     ungroup() %>%
     mutate(u_cell_id = str_c(cell_id, pert_iname, sep = "::")) %>%
-    # pivot_wider(id_cols = analytes, names_from = u_cell_id, values_from = median_value)
-    pivot_wider(id_cols = analytes, names_from = u_cell_id, values_from = mean_value)
+    pivot_wider(id_cols = analytes, names_from = u_cell_id, values_from = median_value)
+  # pivot_wider(id_cols = analytes, names_from = u_cell_id, values_from = mean_value)
   
   reduced_mat <- reduced_tbl %>% dplyr::select(-analytes) %>% as.matrix()
   rownames(reduced_mat) <- analytes_
@@ -389,8 +438,8 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   
   # stop()
   # in the order of the grouping -> we need to adjust colors depending on group content
-  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-gcp-heat.RData")
-  # load("debug/debug_dat/debug-gcp-heat.RData")
+  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-p100-heat.RData")
+  # load("debug/debug_dat/debug-p100-heat.RData")
   # stop()
   
   informative_labels_lst <- create_informative_labels()
@@ -510,7 +559,8 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
     mutate(dom = factor(dom, levels = grp_factor_lvls),
            dom = droplevels(dom)) %>%
     arrange(dom, pert_iname) %>%
-    left_join(ildf %>% distinct(lbs, new_lbs), by = c("cell_id" = "lbs")); grp_color_df
+    left_join(ildf %>% distinct(lbs, new_lbs),
+              by = c("cell_id" = "lbs")); grp_color_df
   
   # grayish color for NA
   col_fun_annot1 <- grp_color_df$color # 1st group being closest to the labels on the right
@@ -664,6 +714,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   
   matrix_analyte_check <- sort(rownames(filtered_test_mat))
   row_order_analyte_check <- sort(row_order_df$analyte)
+  
   setdiff(matrix_analyte_check, row_order_analyte_check)
   setdiff(row_order_analyte_check, matrix_analyte_check)
   
@@ -676,6 +727,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   signif_q_val <- format(row_order_df$p_val_bh, digits = 3, scientific = TRUE)
   extra_analyte_info_init <- row_order_df$mark
   
+  # edit analyte information when talking about GCP
   if (which_dat == "gcp") {
     extra_analyte_info_temp <- str_split(extra_analyte_info_init, 
                                          pattern = "me[0-9]*|ac[0-9]*|ph[0-9]*", 
@@ -760,6 +812,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   
   # change the way the analyte is represented
   analytes_reordered <- row_order_df$analyte
+  
   if (which_dat == "gcp") {
     analytes_reordered_labels <- row_order_df %>% 
       left_join(mod_table, by = c("analyte" = "full_sites")) %>%
@@ -929,7 +982,8 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   length(analytes_reordered)
   length(grp_color_df$unique_id)
   
-  reordered_mat <- reduced_mat[analytes_reordered, grp_color_df$unique_id, drop = F]
+  ### ORDER HERE!!! ###
+  reordered_mat <- reduced_mat[order(analytes_reordered), order(grp_color_df$unique_id), drop = F]
   # reordered_mat <- apply(reordered_mat_temp, 2, FUN = as.numeric)
   
   
@@ -1010,23 +1064,6 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   #   pluck("value")
   
   # check incoming matrix
-  long_mat_for_check <- reordered_mat %>%
-    as_tibble() %>%
-    mutate(analyte = analytes_reordered) %>% # to include the phosphosite or extra info
-    pivot_longer(colnames(reordered_mat), names_to = "cell_drug") %>%
-    separate(cell_drug, into = c("cell_id", "pert_iname"), sep = "::") %>%
-    left_join(grp_color_df %>% dplyr::select(cell_id, cluster), by = "cell_id") 
-  
-  median_df <- long_mat_for_check %>%
-    filter(analyte == "pS12 EIF4A3") %>%
-    mutate(helper_cluster = ifelse(cluster == 2, 1, 0)) %>%
-    group_by(helper_cluster) %>%
-    arrange(cell_id)
-  
- summarized_median_df <- median_df %>% 
-    summarize(clust_median_val = median(value, na.rm = TRUE), .groups = "keep"); summarized_median_df
-  
-  2^(summarized_median_df$clust_median_val[2] - summarized_median_df$clust_median_val[1])
   
   ht <- Heatmap(reordered_mat,
                 name = NAME,
@@ -1035,6 +1072,9 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
                 top_annotation = top_ha,
                 right_annotation = right_ha,
                 # left_annotation = left_ha,
+                # cell_fun = function(j, i, x, y, width, height, fill) {
+                #   grid.text(sprintf("%.1f", reordered_mat[i, j]), x, y, gp = gpar(fontsize = 5))
+                # },
                 
                 # row_title = "Analyte",
                 row_title_side = "right",

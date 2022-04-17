@@ -240,9 +240,10 @@ cache_objects <- function(dir_tbl, target_col = "lst",
 
 #' @note create cluster assignments df for plotting
 #' @param ca cluster assignments NAMED array!! this is the "cut_trees" field in diff_ex
-create_ca_df <- function(ca) {
-  t <- tibble::enframe(ca, name = "cell_id", value = "cluster") %>%
-    distinct(cell_id, cluster)
+#' @param cluster_column_id name of output cluster id
+create_ca_df <- function(ca, cluster_column_id = "cluster") {
+  t <- tibble::enframe(ca, name = "cell_id", value = cluster_column_id) %>%
+    distinct()
   return(t)
 }
 
