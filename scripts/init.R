@@ -56,8 +56,8 @@ set.seed(25)
 
 # specific_data_directory <- "test"
 specific_data_directory <- "All-LINCS-data-LVL4"
-args_fn_name <- "vascular_args.csv"
-# args_fn_name <- "all_args.csv"
+# args_fn_name <- "vascular_args.csv"
+args_fn_name <- "all_args.csv"
 
 
 ## progress bar ##
@@ -225,6 +225,7 @@ my_data_lst <- my_data %>%
 dataset_type_col <- names(my_data_lst)
 
 message("Reading and summarizing data...")
+#' If you want to edit the raw data, edit in *read_and_summarize_data*
 my_data_obj_final <- tibble(
   dataset_type = dataset_type_col,
   # combine the data rows into a single dataset, and nest it
@@ -232,6 +233,8 @@ my_data_obj_final <- tibble(
               .f = read_and_summarize_data
   )
 )
+
+P100 <- read_and_summarize_data(my_data_lst, "P100")
 
 # grab drugs from BOTH P100 and GCP
 my_temp_obj <- bind_rows(my_data_obj_final$data) %>%
@@ -272,10 +275,6 @@ analysis_dat <- inner_join(
   my_data_obj_final, # my_data_obj_final
   by = "dataset_type"
 )
-analysis_dat %>% 
-  unnest(c(data)) %>%
-  filter(pr_gene_symbol != "RPS6KA1_1", 
-         cell_id != "MCF10A")
 
 grouping_var_for_summary <- unlist(analysis_dat_temp$grouping_var)
 filter_vars_for_summary <- unlist(analysis_dat_temp$filter_vars)

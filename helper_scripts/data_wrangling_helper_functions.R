@@ -94,14 +94,15 @@ find_duplicates <- function(tbl) {
 #' @param dtype_ the dataset type of the GCT, e.g. P100 or GCP
 #' @return a merged object that contains all P100 or GCP data
 read_and_summarize_data <- function(l, dtype_) {
-  # l <- my_data_lst[[1]][2:4,]; dtype_ = "P100"
+  # l <- my_data_lst[[1]]; dtype_ = "GCP"
+  # l <- my_data_lst[[2]]; dtype_ = "P100"
   res_temp <- data.table::rbindlist(l$data, fill = TRUE, use.names = TRUE) %>% 
     as_tibble() %>%
-    mutate(which_dat = dtype_) %>%
-    mutate(cell_id = ifelse(cell_id == "Pericytes", "Pericyte", cell_id)) %>%
-    mutate(pert_iname = tolower(pert_iname),
-           det_normalization_group_vector = as.character(det_normalization_group_vector)) %>%
-    mutate(pert_iname = ifelse(pert_iname == "dmso", toupper(pert_iname), pert_iname)) %>%
+    mutate(which_dat = dtype_,
+           cell_id = ifelse(cell_id == "Pericytes", "Pericyte", cell_id),
+           pert_iname = tolower(pert_iname),
+           det_normalization_group_vector = as.character(det_normalization_group_vector),
+           pert_iname = ifelse(pert_iname == "dmso", toupper(pert_iname), pert_iname)) %>%
     ## inner join to only do drugs that I pick!!
     left_join(drugs_moa_df, by = "pert_iname") %>%
     dplyr::rename( 
@@ -115,9 +116,9 @@ read_and_summarize_data <- function(l, dtype_) {
     dplyr::select(master_id, replicate_id, everything()) %>%
     # group_by(replicate_id, pr_gene_symbol) %>%
     distinct(replicate_id, pr_gene_symbol, value, .keep_all = TRUE) %>%
-    # these two filter steps FIRST!
-    filter(pr_gene_symbol != "RPS6KA1_1", 
-           cell_id != "MCF10A"); res_temp
+    # do not include MCF10A
+    filter(cell_id != "MCF10A")
+  message("Removed MCF10A cells...")
 
   if ("pr_gcp_histone_mark" %in% colnames(res_temp)) {
     # no need to do unique names for the histones...
@@ -131,26 +132,32 @@ read_and_summarize_data <- function(l, dtype_) {
                     row_id, value, pr_gene_symbol, mark, everything())
   } else {
     
+    # This needs to be modified - I am seeing duplicate entries!!!
     unique_gene_names_df <- res_temp %>% 
       ungroup() %>% 
       distinct(pr_gene_symbol, pr_p100_phosphosite, pr_p100_modified_peptide_code) %>% 
       group_by(pr_gene_symbol) %>%
       mutate(pr_gene_symbol_u = make.unique(pr_gene_symbol, "_")) %>%
       rename(mark = pr_p100_phosphosite) %>% 
-      ungroup()
+      ungroup(); unique_gene_names_df
     
     res_temp2 <- res_temp %>%
       rename(mark = pr_p100_phosphosite) %>%
       left_join(unique_gene_names_df, 
       by = c("pr_gene_symbol", "mark", "pr_p100_modified_peptide_code")) %>%
       rename(non_unique_pr_gene_symbol = pr_gene_symbol) %>%
-      rename(pr_gene_symbol = pr_gene_symbol_u)
+      rename(pr_gene_symbol = pr_gene_symbol_u); res_temp2
     
     res <- res_temp2 %>%
       dplyr::select(master_id, replicate_id, row_id, column_id, 
                     value, pr_gene_symbol, mark, everything()) 
     
   }
+
+  final_res <- res %>%
+    # these two filter steps FIRST!
+ 
+  
   # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-summary.RData")
   # load("debug/debug_dat/debug-summary.RData")
   # stop()
