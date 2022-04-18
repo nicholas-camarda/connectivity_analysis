@@ -377,9 +377,6 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   #   as.matrix() %>% 
   #   rowMedians(na.rm = TRUE)
   
-  
-  analytes_ <- rownames(filtered_test_mat)
-  u_cell_id_ <- colnames(filtered_test_mat)
   cluster_ids <- column_annots_df %>%
     dplyr::distinct(cluster, cell_id, pert_iname, cluster_name, grp_fac) ; 
   
@@ -396,14 +393,17 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   reduced_tbl <- reduced_long %>%
     group_by(analytes, cell_id, pert_iname, cluster) %>%
     summarize(median_value = median(value, na.rm = T), .groups = "keep") %>%
-    # summarize(mean_value = mean(value, na.rm = T), .groups = "keep") %>%
     ungroup() %>%
+    # summarize(mean_value = mean(value, na.rm = T), .groups = "keep") %>%
     mutate(u_cell_id = str_c(cell_id, pert_iname, sep = "::")) %>%
-    pivot_wider(id_cols = analytes, names_from = u_cell_id, values_from = median_value)
-  # pivot_wider(id_cols = analytes, names_from = u_cell_id, values_from = mean_value)
+    dplyr::select(-cell_id, -pert_iname) %>%
+    pivot_wider(id_cols = analytes, 
+                names_from = u_cell_id, 
+                values_from = median_value); reduced_tbl
   
   reduced_mat <- reduced_tbl %>% dplyr::select(-analytes) %>% as.matrix()
-  rownames(reduced_mat) <- analytes_
+  rownames(reduced_mat) <- reduced_tbl$analytes
+  # reduced_mat["pS12 EIF4A3",]
   
   n_max_clust <- length(unique(cluster_ids$cluster))
   n_max_clust
@@ -420,7 +420,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
           toupper(which_dat),
           sep = " || "
     )
-  )
+  ); TITLE
   # set color breaks at quantiles
   # qnts <- seq(0, 1, 0.125)
   qnts <- c(0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95)
@@ -1072,9 +1072,9 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
                 top_annotation = top_ha,
                 right_annotation = right_ha,
                 # left_annotation = left_ha,
-                # cell_fun = function(j, i, x, y, width, height, fill) {
-                #   grid.text(sprintf("%.1f", reordered_mat[i, j]), x, y, gp = gpar(fontsize = 5))
-                # },
+                cell_fun = function(j, i, x, y, width, height, fill) {
+                  grid.text(sprintf("%.1f", reordered_mat[i, j]), x, y, gp = gpar(fontsize = 5))
+                },
                 
                 # row_title = "Analyte",
                 row_title_side = "right",
