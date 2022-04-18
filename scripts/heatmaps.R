@@ -364,19 +364,6 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
                                                   plot_cluster_bar = FALSE,
                                                   add_D_stat = FALSE) {
   message("Plotting for: ", base_cell_id)
-  # stop()
-  # check- this matches 
-  # filtered_test_mat["pS12 EIF4A3",
-  #                   grep(pattern = "HUVEC", x = colnames(filtered_test_mat)),
-  #                   drop = F] %>%
-  #   as.matrix() %>%
-  #   Heatmap(cluster_rows = FALSE, cluster_columns = FALSE)
-  # filtered_test_mat["pS12 EIF4A3",
-  #                   grep(pattern = "HUVEC", x = colnames(filtered_test_mat)),
-  #                   drop = F] %>%
-  #   as.matrix() %>% 
-  #   rowMedians(na.rm = TRUE)
-  
   cluster_ids <- column_annots_df %>%
     dplyr::distinct(cluster, cell_id, pert_iname, cluster_name, grp_fac) ; 
   
@@ -387,7 +374,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
     as_tibble() %>%
     pivot_longer(cols = colnames(.)[-1], names_to = 'joint') %>%
     separate(col = joint, into = c("joint2","replicate_id", "plate_id"), sep = "::") %>%
-    separate(col = joint2, into = c("cell_id", "pert_iname","pert_class"))  %>%
+    separate(col = joint2, into = c("cell_id", "pert_iname","pert_class"), sep = "--")  %>%
     left_join(cluster_ids, by = c("cell_id", "pert_iname"))
 
   reduced_tbl <- reduced_long %>%
@@ -984,73 +971,8 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   
   ### ORDER HERE!!! ###
   reordered_mat <- reduced_mat[analytes_reordered, grp_color_df$unique_id, drop = F]
-  # reordered_mat <- apply(reordered_mat_temp, 2, FUN = as.numeric)
-  
-  
-  
-  # base_cell_indices <- which(grp_color_df$grp_fac == base_cell_id)
-  # base_grp_color <- unique(grp_color_df %>% filter(grp_fac == base_cell_id) %>% .$color)
-  # rest_cell_color <- "darkgray"
-  # rest_cell_indices <- which(grp_color_df$grp_fac != base_cell_id)
-  
-  # # scale of the boxplot annotation
-  # rg <- range(reordered_mat, na.rm = TRUE)
-  # rg[1] = rg[1] - (rg[2] - rg[1])* 0.02
-  # rg[2] = rg[2] + (rg[2] - rg[1])* 0.02
-  # 
-  # anno_multiple_boxplot = function(index) {
-  #   # rows of matrix
-  #   nr = length(index)
-  #   # message(nr)
-  #   pushViewport(viewport(xscale = rg, yscale = c(0.5, nr + 0.5)))
-  #   for(i in seq_along(index)) {
-  #     grid.rect(y = nr-i+1, height = 1, default.units = "native")
-  #     # first group
-  #     # grid.abline(intercept = 0, gp = gpar(lty = 3,lwd = 3, col = "red"))
-  #     grid.boxplot(reordered_mat[ index[i], base_cell_indices] %>% na.omit(),
-  #                  pos = nr-i+1 + 0.2,
-  #                  box_width = 0.4, size = unit(1, "mm"),
-  #                  gp = gpar(fill = base_grp_color),
-  #                  direction = "horizontal")
-  #     # second group
-  #     grid.boxplot(reordered_mat[ index[i], rest_cell_indices] %>% na.omit(),
-  #                  pos = nr-i+1 - 0.2,
-  #                  box_width = 0.4,
-  #                  size = unit(1, "mm"),
-  #                  gp = gpar(fill = rest_cell_color),
-  #                  direction = "horizontal")
-  #     
-  #   }
-  #   grid.xaxis(gp = gpar(fontsize = 8))
-  #   popViewport()
-  # }
-  
-  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-p100-heat.RData")
-  # load("debug/debug_dat/debug-p100-heat.RData")
-  # stop()
-  
-  # get max of finite values
-  # bar_plot_q_values <- signif_log_q_for_bar_plot
-  # bar_plot_q_values[is.infinite(bar_plot_q_values)] = max(bar_plot_q_values[is.finite(bar_plot_q_values)], na.rm = TRUE)
-  # 
-  # left_ha <- rowAnnotation(
-  #   boxplot = anno_multiple_boxplot,
-  #   `bar` = anno_barplot(bar_plot_q_values, 
-  #                        gp = gpar(fontsize = 8, fill = "darkgray"),
-  #                        axis_param = list(labels_rot = 0)),
-  #   width = unit(4, "cm"),
-  #   gap = unit(2, "mm"),
-  #   # annotation_name_rot = 45,
-  #   show_annotation_name = FALSE
-  #   # show_annotation_names = FALSE
-  # # signif_log_q_for_bar_plot)
-  #   # width = unit(4, "cm"),
-  #   # gap = unit(1.5, "mm")
-  #   # annotation_legend_param = list(`bar` = list(title = "Q-value"))
-  # )
-  # draw(left_ha)
-  # 
-  
+
+  ### insert code for left-annotation here if you want to use it ###
   
   ht_opt$message = FALSE
   ht_opt$COLUMN_ANNO_PADDING <- unit(2, "mm")

@@ -431,13 +431,13 @@ run_diffe <- function(dat, cob, dname) {
       base_clust_comp, base_clust_comp_name, value, pr_gene_symbol
     ) %>%
     ungroup(); mat_tbl
-
+  
   # calculate the correct logFC's 
   calculate_logFC_grouped <- function(df_ = NA, i_clust = NA){
     median_df <- df_ %>%
       mutate(helper_cluster = ifelse(base_clust_comp == i_clust, 1, 0)) %>%
       arrange(cell_id); median_df
-
+    
     #' @note this is not what we want
     #'  this is how the FC is calculated in ks.test loop
     # summarized_median_df_clust_first <- median_df %>%
@@ -455,8 +455,8 @@ run_diffe <- function(dat, cob, dname) {
       pivot_wider(id_cols = pr_gene_symbol, 
                   names_from = c(cell_id, helper_cluster), names_sep = "__", 
                   values_from = gene_clust_median_val) %>%
-    ungroup() ; summarized_median_df_extr_info
-
+      ungroup() ; summarized_median_df_extr_info
+    
     summarized_median_df <- median_df %>%
       group_by(helper_cluster, cell_id, pr_gene_symbol) %>%
       summarize(gene_clust_median_val = median(value, na.rm = TRUE), .groups = "keep") %>%
@@ -472,13 +472,6 @@ run_diffe <- function(dat, cob, dname) {
       mutate(logFC = cluster_1_median - cluster_0_median,
              fc = 2^logFC) %>%
       rename(analyte = pr_gene_symbol); summarized_median_df
-    
-    summarized_median_df %>% slice(1) %>% dplyr::select(cluster_0_median)
-    summarized_median_df %>% slice(1) %>% dplyr::select(ends_with("_0"))
-    rowMedians(summarized_median_df %>% slice(1) %>% dplyr::select(ends_with("_0")) %>% as.matrix())
-    summarized_median_df %>% slice(1) %>% dplyr::select(cluster_1_median)
-    summarized_median_df %>% slice(1) %>% dplyr::select(ends_with("_1"))
-    rowMedians(summarized_median_df %>% slice(1) %>% dplyr::select(ends_with("_1")) %>% as.matrix())
     
     # res <- list(logfc_df = summarized_median_df)
     return(summarized_median_df)
@@ -507,22 +500,9 @@ run_diffe <- function(dat, cob, dname) {
     .$pr_gene_symbol %>%
     unique(); feature_names
   
-  p2 <- progressr::progressor(steps = length(clusts_int_vec) * length(feature_names))
-  
-  #' *note* this t1_mat IS the same as reduced_long, which is used in heatmaps to plot the raw data 
-  #' (ultimately median transformed, which i'm investigating)
-  
-  # t1_mat_for_diffe <- matrix_for_diffe %>% 
-  #   group_by(cell_id, pert_iname, base_clust_comp, base_clust_comp_name) %>%
-  #   arrange(cell_id) %>% 
-  #   pluck("pS12 EIF4A3")
-  # %>% 
-  #   summarize(median_ = median(`pS12 EIF4A3`, na.rm= TRUE))
-  # use this to loop through clusters
-  
   clusts_int_vec <- clust_label_df$base_clust_comp; clusts_int_vec
   
-  message("Computing differential analytes..")
+  p2 <- progressr::progressor(steps = length(clusts_int_vec) * length(feature_names))
   diffe_by_clust_df <- map_df(clusts_int_vec, function(ith_cluster) {
     # ith_cluster <- clusts_int_vec[2]
     
@@ -674,11 +654,11 @@ run_diffe <- function(dat, cob, dname) {
     # mutate(p_val_boot_bh = p_val_boot_bh + .Machine$double.xmin) %>%
     mutate(neg_log10_p_val_bh = -log10(p_val_bh),
            neg_log10_p_val_boot_bh = -log10(p_val_boot_bh)) %>%
+    # add in the correctly calculated logFC 
+    left_join(logFC_df, by = c("analyte", "base_clust_comp", "base_clust_comp_name")) %>%
     mutate(signif_and_fold = ifelse(signif & (fc >= FC_UPPER_BOUND), TRUE,
                                     ifelse(signif & (fc < FC_LOWER_BOUND), TRUE, FALSE)
-    )) %>%
-    # add in the correctly calculated logFC 
-    left_join(logFC_df, by = c("analyte", "base_clust_comp", "base_clust_comp_name"))
+    )) 
   
   diffe_final_res <- diffe_final_res_temp %>% 
     mutate(label_ = analyte) %>%
@@ -694,7 +674,7 @@ run_diffe <- function(dat, cob, dname) {
   #   filter(base_clust_comp == 2, , 
   #          analyte == "pS12 EIF4A3") %>%
   #   dplyr::select(analyte, ends_with("_1"), cluster_1_median) 
-    
+  
   
   signif_df <- diffe_final_res %>%
     filter(signif_and_fold)
