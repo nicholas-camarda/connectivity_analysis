@@ -123,8 +123,6 @@ source(file.path(working_directory, "scripts", "dendrograms.R"), local = T)
 source(file.path(working_directory, "scripts", "heatmaps.R"), local = T)
 source(file.path(working_directory, "helper_scripts", "connectivity_and_clustering_helper_functions.R"), local = T)
 source(file.path(working_directory, "helper_scripts", "data_wrangling_helper_functions.R"), local = T)
-# source(file.path(working_directory, "helper_scripts", "morpheus_helper_functions.R"), local = T)
-
 
 #' @note constants
 rerun_clustering <- TRUE; rerun_diffe <- TRUE;
@@ -184,13 +182,6 @@ my_data <- tibble(fns = dir(file.path(datasets_directory, specific_data_director
   inner_join(analysis_dat_temp, by = "dataset_type")
 
 drugs_moa_df <- create_my_drugs_df(ref_dir = references_directory)
-
-# read in shared plated IDs from Srila's data
-# run debug-dataset.R first!
-debug_fn <- file.path(working_directory, "debug/shared_plate_ids.tsv")
-shared_plate_id_df <- read_tsv(debug_fn,show_col_types = FALSE) %>%
-  arrange(shared_plate_ids)
-shared_plate_ids <- shared_plate_id_df$shared_plate_ids
 
 # write summary file of data paths
 file_summary_dat <- my_data %>%
