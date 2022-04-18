@@ -993,10 +993,13 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
                 na_col = "gray",
                 top_annotation = top_ha,
                 right_annotation = right_ha,
+                
                 # left_annotation = left_ha,
-                cell_fun = function(j, i, x, y, width, height, fill) {
-                  grid.text(sprintf("%.1f", reordered_mat[i, j]), x, y, gp = gpar(fontsize = 5))
-                },
+                
+                #' @note turn this on to draw in the values of each cell!
+                # cell_fun = function(j, i, x, y, width, height, fill) {
+                #   grid.text(sprintf("%.1f", reordered_mat[i, j]), x, y, gp = gpar(fontsize = 5))
+                # },
                 
                 # row_title = "Analyte",
                 row_title_side = "right",
