@@ -97,11 +97,14 @@ read_and_summarize_data <- function(l, dtype_) {
   # l <- my_data_lst[[1]]; dtype_ = "GCP"
   # l <- my_data_lst[[2]]; dtype_ = "P100"
   # message(dtype_)
-  res_temp <- data.table::rbindlist(l$data, fill = TRUE, use.names = TRUE) %>% 
+  res_temp <- data.table::rbindlist(l$data, fill = TRUE, use.names = TRUE) %>%
     as_tibble() %>%
     mutate(which_dat = dtype_) %>%
-    mutate(cell_id = ifelse(cell_id == "Pericytes", "Pericyte", cell_id),
-           pert_iname = tolower(pert_iname)) %>%
+    mutate(
+      cell_id = ifelse(cell_id == "Pericytes", "Pericyte", cell_id),
+      pert_iname = tolower(pert_iname)
+    ) %>%
+    mutate(pert_iname = str_trim(str_replace(pert_iname, pattern = "\\(chembl1797936\\)", ""), "both")) %>%
     # do not include MCF10A
     dplyr::filter(cell_id != "MCF10A") %>%
     mutate(det_normalization_group_vector = as.character(det_normalization_group_vector),
