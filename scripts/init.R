@@ -1,65 +1,50 @@
+# main libraries
+library(data.table)
 library(tidyverse)
-library(ggrepel)
 library(readxl)
+
+library(ggrepel)
 library(ggsci)
-library(ggpubr)
 library(ggforce)
+library(ggpubr)
 library(scales)
-# library(tidymodels)
-library(wesanderson) # only for color palette
 
-# library(xml2)
-# library(XML)
-
+# colors
 library(RColorBrewer)
 library(randomcoloR)
 library(pals)
 library(colorspace)
 
-# bioconductor pacakges that need to be installed manually
-# if (!requireNamespace("BiocManager", quietly = TRUE))
-#   install.packages("BiocManager")
-# BiocManager::install(version = "3.13")
-# BiocManager::install(c("ComplexHeatmap", "cmapR", "circlize"))
-# BiocManager::install(c("cmapR"))
+# bioconductor
 library(cmapR)
 library(circlize)
 library(ComplexHeatmap)
-# library(BiocParallel)
 
-# for seg fault issues.. https://issueexplorer.com/issue/wch/extrafont/89
 library(extrafont)
 # do this once
 # font_import()
-# loadfonts(device="postscript")
-fonts()
+extrafont::fonts()
 
-
-# clustering
-library(cluster)
-library(factoextra)
-library(dbscan)
-library(fpc)
-
+# progress bar
 library(progressr)
 
-library(minerva) # non-linear correlation analysis with mutual information theory
-library(matrixStats)
+# clustering and trees
 library(pvclust) # cluster stability, Lev's paper
 library(Matching)
-
 library(dendextend)
 
+# formatting
 library(GetoptLong)
 library(gridExtra)
 
 set.seed(25)
 
-# specific_data_directory <- "test"
+# name of output directory
+my_output_directory <- "test-LVL4" # "All-LINCS-data-LVL4"
+# name of data directory, should contain LVL3|4 info!
 specific_data_directory <- "All-LINCS-data-LVL4"
-# args_fn_name <- "vascular_args.csv"
-args_fn_name <- "all_args.csv"
-# args_fn_name <- "test_args.csv"
+# args.csv 
+args_fn_name <- "test_args.csv" # "all_args.csv" 
 
 
 ## progress bar ##
@@ -77,16 +62,19 @@ handlers(handler_progress(
 winos <- ifelse(grepl("windows", Sys.info()["sysname"], ignore.case = T), 1, 
                 ifelse(grepl("linux", Sys.info()["sysname"], ignore.case = T), 2, 0))
 if (winos == 1) {
+  # windows
   working_directory <- file.path(
     "C:", "Users", "ncama",
     "OneDrive - Tufts", "phd", "ws", "proteomics"
   )
 } else if (winos == 0) {
+  # mac
   working_directory <- file.path(
     "", "Users", "ncamarda",
     "OneDrive - Tufts", "phd", "ws", "proteomics"
   )
 } else {
+  # linux
   working_directory <- file.path(
     "", "home", "ncamarda93",
     "OneDrive - Tufts", "phd", "ws", "proteomics"
@@ -94,7 +82,7 @@ if (winos == 1) {
 }
 
 # The level of data we are processing
-lvl4_bool_data <- str_detect(string = specific_data_directory, 
+lvl4_bool_data <- stringr::str_detect(string = specific_data_directory, 
                              pattern = "LVL4") 
 
 if (lvl4_bool_data) {
@@ -113,7 +101,7 @@ if (lvl4_bool_data) {
   message("LVL3 data has ")
 }
 
-output_directory <- file.path(working_directory, str_c("output", specific_data_directory, sep = "_"))
+output_directory <- file.path(working_directory, str_c("output", my_output_directory, sep = "_"))
 data_directory <- file.path(working_directory, "data")
 
 setwd(working_directory)
@@ -139,7 +127,6 @@ source(file.path(working_directory, "helper_scripts", "data_wrangling_helper_fun
 
 
 #' @note constants
-drug_bank_database_fn <- file.path(references_directory, "full database.xml")
 rerun_clustering <- TRUE; rerun_diffe <- TRUE;
 set_run_organization <- c("pert_iname", "drug_class", "all")
 cancer_vs_non_cancer <- TRUE; plot_morpheus_toggle <- FALSE
@@ -151,13 +138,10 @@ p100_base_output_dir <- file.path(output_directory, "p100")
 dir.create(p100_base_output_dir, recursive = T, showWarnings = F)
 gcp_base_output_dir <- file.path(output_directory, "gcp")
 dir.create(gcp_base_output_dir, recursive = T, showWarnings = F)
-avg_base_output_dir <- file.path(output_directory, "avg")
-dir.create(avg_base_output_dir, recursive = T, showWarnings = F)
 
 dir_tbl <- tribble(~dataset_type, ~output_dir,
                    "P100", p100_base_output_dir,
-                   "GCP", gcp_base_output_dir,
-                   "AVG", avg_base_output_dir)
+                   "GCP", gcp_base_output_dir)
 
 vascular_char_vec <- c("HUVEC", "HAoSMC", "Pericyte")
 
@@ -196,11 +180,6 @@ my_data <- tibble(fns = dir(file.path(datasets_directory, specific_data_director
   )) %>%
   mutate(dataset_type = str_extract(string = fns, pattern = "GCP|P100")) %>%
   arrange(desc(dataset_type)) %>%
-  # mutate(
-  #   ranked_gct = map(.x = gct, .f = cmapR::rank_gct, dim = "col"),
-  #   mat = map(.x = gct, .f = cmapR::mat),
-  #   ranked_mat = map(.x = ranked_gct, .f = cmapR::mat)
-  # ) %>%
   mutate(data = map(.x = gct, .f = melt_gct)) %>%
   inner_join(analysis_dat_temp, by = "dataset_type")
 
@@ -213,6 +192,7 @@ shared_plate_id_df <- read_tsv(debug_fn,show_col_types = FALSE) %>%
   arrange(shared_plate_ids)
 shared_plate_ids <- shared_plate_id_df$shared_plate_ids
 
+# write summary file of data paths
 file_summary_dat <- my_data %>%
   distinct(dataset_type, fns) %>%
   dplyr::select(dataset_type, fns) %>%
@@ -225,6 +205,7 @@ write_tsv(file_summary_dat, file = file.path(data_directory, "fn_list.tsv"))
 my_data_lst <- my_data %>%
   split(.$dataset_type)
 dataset_type_col <- names(my_data_lst)
+
 
 message("Reading and summarizing data...")
 #' If you want to edit the raw data, edit in *read_and_summarize_data*
@@ -240,14 +221,6 @@ my_data_obj_final <- tibble(
 my_temp_obj <- bind_rows(my_data_obj_final$data) %>%
   ungroup()
 
-# drugs_to_plot_df <- my_temp_obj %>%
-#   filter(!is.na(value)) %>%
-#   dplyr::select(cell_id, pert_iname, value) %>%
-#   pivot_wider(id_cols = pert_iname, names_from = cell_id, 
-#               values_from = value, 
-#               values_fn = median) %>%
-#   na.omit() 
-# my_perts <- drugs_to_plot_df$pert_iname
 HUVEC_HAoSMC_perts <- my_temp_obj %>%
   filter(cell_id %in% vascular_char_vec) %>%
   ungroup() %>%

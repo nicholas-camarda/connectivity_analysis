@@ -130,9 +130,10 @@ read_and_summarize_data <- function(l, dtype_) {
              pr_gene_symbol_temp = pr_gene_symbol,
              pr_gene_symbol = mark) %>% 
       dplyr::select(master_id, replicate_id, column_id, 
-                    row_id, value, pr_gene_symbol, mark, everything())
+                    row_id, value, pr_gene_symbol, mark, everything()) %>%
+      ungroup()
     
-    write_tsv(res_temp %>% distinct(pr_gene_symbol, pr_gcp_histone_mark), 
+    write_tsv(res %>% distinct(pr_gene_symbol, pr_gcp_histone_mark), 
               file = file.path(data_directory, "GCP-genes_with_marks_and_peptides.tsv"))
     
   } else {
@@ -160,7 +161,8 @@ read_and_summarize_data <- function(l, dtype_) {
     
     res <- res_temp2 %>%
       dplyr::select(master_id, replicate_id, row_id, column_id, 
-                    value, pr_gene_symbol, mark, everything()) 
+                    value, pr_gene_symbol, mark, everything()) %>%
+      ungroup()
     
   }
   
@@ -168,16 +170,9 @@ read_and_summarize_data <- function(l, dtype_) {
   # load("debug/debug_dat/debug-summary.RData")
   # stop()
   
-  num_distinct_drugs <- res$pert_iname %>% unique() %>% length()
-  num_distinct_cells <- res$cell_id %>% unique() %>% length()
-  cmbd_drug_cell_n <- num_distinct_drugs*num_distinct_cells
-  
   message("Plotting summary data...")
   g <- ggplot(res) +
     geom_boxplot(aes(x=pr_gene_symbol, y=value)) + # 
-    # geom_point(aes(x=pr_gene_symbol, y=value, fill = cell_id), 
-    #            size = rel(0.01), shape = 21, 
-    #            position = position_jitterdodge()) +
     theme_bw(base_size = 7) +
     theme(axis.text.x = element_text(size = rel(1.5), angle=90, hjust=1, vjust=1)) +
     ggtitle(dtype_) 
@@ -186,26 +181,7 @@ read_and_summarize_data <- function(l, dtype_) {
   dir.create(plot_dir, recursive = T, showWarnings = F)
   ggsave(g, filename = file.path(plot_dir, qq("@{dtype_}.pdf")),
          width = 20, height = 10)
-  
-  # init_cell <- g + 
-  #   ggforce::facet_grid_paginate(~cell_id, nrow = 1, ncol = 3)
-  # n_pages_g_cell <- ggforce::n_pages(init_cell); n_pages_g_cell
-  # 
-  # pdf(file = "~/Downloads/test.pdf", width = 10, height = 5)
-  # for (p in 1:n_pages_g_cell) {
-  #   g_ <- g + ggforce::facet_grid_paginate(~cell_id, nrow = 1, ncol = 3, page = p)
-  #   print(g_)
-  # }
-  # dev.off()
-  # 
-  # g_pert <- g +
-  #   ggforce::facet_grid_paginate(cell_id~pert_iname, ncol = 3, page = cmbd_drug_cell_n/6)
 
-  # ggsave(g_cell, filename = file.path(plot_dir, qq("@{dtype_}-cell.pdf")), 
-  #        width = 10, height = 10)
-  # ggsave(g_pert, filename = file.path(plot_dir, qq("@{dtype_}-pert.pdf")), 
-  #        width = 20, height = 10)
-  # 
   return(res)
 }
 
