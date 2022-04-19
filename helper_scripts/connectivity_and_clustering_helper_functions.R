@@ -536,7 +536,7 @@ run_diffe <- function(dat, cob, dname) {
       n_non_na_vec1 <- length(c1[!is.na(c1)]); n_non_na_vec1
       n_non_na_vec2 <- length(c2[!is.na(c2)]); n_non_na_vec2
       
-      # if at least half of the results are missing, then quit
+      # if at least 1/3 of the results are missing, then quit
       if (n_non_na_vec1/c1_length < (1/3) | n_non_na_vec2/c2_length < (1/3)) {
         # message("Not enough data to compute diffe for ", k)
         res <- tibble(
