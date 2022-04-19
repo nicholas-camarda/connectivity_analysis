@@ -504,11 +504,8 @@ run_diffe <- function(dat, cob, dname) {
     unique(); feature_names
   
   clusts_int_vec <- clust_label_df$base_clust_comp; clusts_int_vec
-  
   p2 <- progressr::progressor(steps = length(clusts_int_vec) * length(feature_names))
-  # uncomment the p2() calls in this map loop to get progress info??
-  
-  # tic()
+
   diffe_by_clust_df <- map_df(clusts_int_vec, function(ith_cluster) {
     # ith_cluster <- clusts_int_vec[2]
     
@@ -534,10 +531,13 @@ run_diffe <- function(dat, cob, dname) {
         filter(base_clust_comp != i) %>%
         pluck(k); c2
       
+      c1_length <- length(c1)
+      c2_length <- length(c2)
       n_non_na_vec1 <- length(c1[!is.na(c1)]); n_non_na_vec1
       n_non_na_vec2 <- length(c2[!is.na(c2)]); n_non_na_vec2
       
-      if (n_non_na_vec1 < 1 | n_non_na_vec2 < 1) {
+      # if at least half of the results are missing, then quit
+      if (n_non_na_vec1/c1_length < (1/3) | n_non_na_vec2/c2_length < (1/3)) {
         # message("Not enough data to compute diffe for ", k)
         res <- tibble(
           analyte = k, 
@@ -622,7 +622,6 @@ run_diffe <- function(dat, cob, dname) {
     
     return(cluster_res)
   })
-  # toc()
   
   # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-gcp-epi-diffe.RData")
   # load("debug/debug_dat/debug-gcp-epi-diffe.RData")

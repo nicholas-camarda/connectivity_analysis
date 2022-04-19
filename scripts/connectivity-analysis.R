@@ -2,6 +2,7 @@
 source(file.path("scripts", "init.R"))
 
 # analysis apply function
+tic()
 analysis_res <- apply(analysis_dat, 1, function(args) {
   # DEBUG: args = analysis_dat[1,];
   # DEBUG:  my_obj <- force_natural(args$data)
@@ -333,4 +334,5 @@ write_rds(analysis_res, file = file.path(output_directory, "final_result.rds"), 
 
 message("\nDone with everything!")
 gc()
+toc()
 
