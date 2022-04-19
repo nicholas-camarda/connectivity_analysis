@@ -37,6 +37,13 @@ library(dendextend)
 library(GetoptLong)
 library(gridExtra)
 
+
+# multicore configuration
+library(furrr)
+no_cores <- availableCores() - 1
+plan(multisession, workers = no_cores)
+
+# random seed set for global session
 set.seed(25)
 
 # name of output directory

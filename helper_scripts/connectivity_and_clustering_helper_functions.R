@@ -432,31 +432,31 @@ run_diffe <- function(dat, cob, dname) {
     ) %>%
     ungroup(); mat_tbl
   
-  # calculate the correct logFC's 
+  # calculate the correct logFC's on mat_tbl
+  #' @param df_ is the mat_tbl df
+  #' @param i_clust is the ith cluster to be base_clust_comp, or the cluster
+  #' we are comparing everything else to
+  #' @return df containing logFC, fc, d_stat, and signif info
   calculate_logFC_grouped <- function(df_ = NA, i_clust = NA){
+    # message(i_clust)
     median_df <- df_ %>%
       mutate(helper_cluster = ifelse(base_clust_comp == i_clust, 1, 0)) %>%
       arrange(cell_id); median_df
-    
-    #' @note this is not what we want
-    #'  this is how the FC is calculated in ks.test loop
-    # summarized_median_df_clust_first <- median_df %>%
-    #   group_by(helper_cluster, pr_gene_symbol) %>%
-    #   summarize(gene_clust_median_val = median(value, na.rm = TRUE), .groups = "keep") %>%
-    #   pivot_wider(id_cols = pr_gene_symbol, names_from = helper_cluster, names_prefix = "cluster_", 
-    #               values_from = gene_clust_median_val) %>%
-    #   mutate(logFC = cluster_1 - cluster_0,
-    #          fc = 2^logFC) %>%
-    #   rename(analyte = pr_gene_symbol); summarized_median_df_clust_first
-    
-    summarized_median_df_extr_info <- median_df %>%
+  
+    # get some extra info
+    extra_info_temp <- median_df %>%
       group_by(helper_cluster, cell_id, pr_gene_symbol) %>%
-      summarize(gene_clust_median_val = median(value, na.rm = TRUE), .groups = "keep") %>%
+      summarize(gene_clust_median_val = median(value, na.rm = TRUE), .groups = "keep")
+    
+    # wide summarized info
+    # this is the median value of each cell_ID!
+    summarized_median_df_extr_info <- extra_info_temp %>%
       pivot_wider(id_cols = pr_gene_symbol, 
                   names_from = c(cell_id, helper_cluster), names_sep = "__", 
                   values_from = gene_clust_median_val) %>%
-      ungroup() ; summarized_median_df_extr_info
+      ungroup(); summarized_median_df_extr_info
     
+    # then make final df, combining cluster-specific medians and cell_id specific medians
     summarized_median_df <- median_df %>%
       group_by(helper_cluster, cell_id, pr_gene_symbol) %>%
       summarize(gene_clust_median_val = median(value, na.rm = TRUE), .groups = "keep") %>%
@@ -466,12 +466,15 @@ run_diffe <- function(dat, cob, dname) {
                   values_fn = function(x) median(x, na.rm= TRUE),
                   names_prefix = "cluster_") %>%
       ungroup() %>%
+      # join the extra info to main
       left_join(summarized_median_df_extr_info, by = "pr_gene_symbol") %>%
       rename(cluster_1_median = cluster_1, cluster_0_median = cluster_0) %>%
       # base cluster minus everything ELSE
       mutate(logFC = cluster_1_median - cluster_0_median,
              fc = 2^logFC) %>%
-      rename(analyte = pr_gene_symbol); summarized_median_df
+      rename(analyte = pr_gene_symbol) %>%
+      mutate(directional_stat = ifelse(logFC > 0, "++", "--")) 
+    # summarized_median_df
     
     # res <- list(logfc_df = summarized_median_df)
     return(summarized_median_df)
@@ -503,6 +506,9 @@ run_diffe <- function(dat, cob, dname) {
   clusts_int_vec <- clust_label_df$base_clust_comp; clusts_int_vec
   
   p2 <- progressr::progressor(steps = length(clusts_int_vec) * length(feature_names))
+  # uncomment the p2() calls in this map loop to get progress info??
+  
+  # tic()
   diffe_by_clust_df <- map_df(clusts_int_vec, function(ith_cluster) {
     # ith_cluster <- clusts_int_vec[2]
     
@@ -514,7 +520,8 @@ run_diffe <- function(dat, cob, dname) {
     message(str_c("\nCluster ID:", ith_cluster, "\n#", base_clust_comp_name, sep = " "))
     p2()
     
-    cluster_res <- map2_df(feature_names, ith_cluster, function(k, i) {
+    # i want this result to be bound by rows! since each feature-cluster pair will be an 'observation'
+    cluster_res <- future_map2_dfr(feature_names, ith_cluster, function(k, i) {
       # k <- feature_names[35]; i <- ith_cluster
       # DEBUG:
       # message(k)
@@ -533,13 +540,11 @@ run_diffe <- function(dat, cob, dname) {
       if (n_non_na_vec1 < 1 | n_non_na_vec2 < 1) {
         # message("Not enough data to compute diffe for ", k)
         res <- tibble(
-          analyte = k,
-          logFC = NA, base_clust_comp = as.integer(i),
+          analyte = k, 
+          base_clust_comp = as.integer(i),
           base_clust_comp_name = base_clust_comp_name,
           ks_statistic = NA,
           ks_boot_statistic = NA,
-          # signal_to_noise_statistic = NA,
-          directional_stat = NA,
           p_val = NA, p_val_boot = NA,
           p_val_bh = NA,
           p_val_boot_bh = NA,
@@ -566,21 +571,7 @@ run_diffe <- function(dat, cob, dname) {
       # quantifies the distance between the empirical distribution of given two samples
       stat <- ks$statistic
       stat_boot <- ks_boot$ks$statistic
-      
-      #' @note assumes data are already log transformed!!!
-      #' So a fold change is simply a difference, not a division!!
-      #' is this the correct way to calculate diffex??
-      
-      c1_median <- median(c1, na.rm = T); c1_median
-      c2_median <- median(c2, na.rm = T); c2_median
-      logfc <- c1_median - c2_median; logfc
-      
-      # logfc <- mean(c1, na.rm = TRUE) - mean(c2, na.rm = TRUE)
-      d_stat <- ifelse(logfc > 0, "++", "--")
-      
-      # min_x <- min(c(min(c1, na.rm = T), min(c2, na.rm = T))); min_x
-      # max_x <- max(c(max(c1, na.rm = T), max(c2, na.rm = T))); max_x
-      
+  
       c1_names_df <- matrix_for_diffe %>%
         filter(base_clust_comp == i) %>%
         mutate(
@@ -608,17 +599,15 @@ run_diffe <- function(dat, cob, dname) {
       #' @note I'm pretty sure we want to adjust the p-values per cluster comparison...
       res <- tibble(
         analyte = k, 
-        logFC = logfc, 
         base_clust_comp = i,
         base_clust_comp_name = base_clust_comp_name,
         ks_statistic = stat,
         ks_boot_statistic = stat_boot,
-        # signal_to_noise_statistic = signal_to_nose,
-        directional_stat = d_stat, 
         p_val = ks$p.value, p_val_boot = ks_boot$ks.boot.pvalue,
         p_val_bh = p.adjust(ks$p.value, method = "BH"),
         p_val_boot_bh = p.adjust(ks_boot$ks.boot.pvalue, method = "BH")
       ) %>%
+        # determine significance of comparison based on bh_thresh
         mutate(signif = p_val_boot_bh < bh_thresh_val) %>%
         mutate(
           k_clust_dat = list(c1),
@@ -633,6 +622,7 @@ run_diffe <- function(dat, cob, dname) {
     
     return(cluster_res)
   })
+  # toc()
   
   # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-gcp-epi-diffe.RData")
   # load("debug/debug_dat/debug-gcp-epi-diffe.RData")
@@ -648,33 +638,19 @@ run_diffe <- function(dat, cob, dname) {
   diffe_final_res_temp <- diffe_by_clust_df %>%
     left_join(phosphosite_meta, by = "analyte") %>%
     dplyr::select(analyte, pr_gene_id, mark, everything()) %>%
-    rename(logFC_clust = logFC) %>%
-    mutate(fc_clust = 2^logFC_clust) %>%
     # so that log doesn't cause inf
     # mutate(p_val_boot_bh = p_val_boot_bh + .Machine$double.xmin) %>%
     mutate(neg_log10_p_val_bh = -log10(p_val_bh),
            neg_log10_p_val_boot_bh = -log10(p_val_boot_bh)) %>%
     # add in the correctly calculated logFC 
     left_join(logFC_df, by = c("analyte", "base_clust_comp", "base_clust_comp_name")) %>%
+    # use the p-value significance and fold change to compute signif diff and fold change
     mutate(signif_and_fold = ifelse(signif & (fc >= FC_UPPER_BOUND), TRUE,
-                                    ifelse(signif & (fc < FC_LOWER_BOUND), TRUE, FALSE)
-    )) 
+                                    ifelse(signif & (fc <= FC_LOWER_BOUND), TRUE, FALSE)))
   
   diffe_final_res <- diffe_final_res_temp %>% 
     mutate(label_ = analyte) %>%
-    dplyr::select(signif_and_fold, signif, logFC, fc,
-                  logFC_clust, fc_clust, analyte, everything()); diffe_final_res
-  
-  # diffe_final_res %>%
-  #   filter(base_clust_comp == 2, 
-  #          analyte == "pS12 EIF4A3") %>%
-  #   dplyr::select(analyte, ends_with("_0"), cluster_0_median)
-  # 
-  # diffe_final_res %>%
-  #   filter(base_clust_comp == 2, , 
-  #          analyte == "pS12 EIF4A3") %>%
-  #   dplyr::select(analyte, ends_with("_1"), cluster_1_median) 
-  
+    dplyr::select(signif_and_fold, signif, logFC, fc, analyte, everything()); diffe_final_res
   
   signif_df <- diffe_final_res %>%
     filter(signif_and_fold)
