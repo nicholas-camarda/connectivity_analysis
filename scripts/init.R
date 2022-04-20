@@ -36,7 +36,7 @@ library(dendextend)
 # formatting
 library(GetoptLong)
 library(gridExtra)
-
+library(tictoc)
 
 # multicore configuration
 library(furrr)
@@ -90,7 +90,7 @@ if (winos == 1) {
 
 # The level of data we are processing
 lvl4_bool_data <- stringr::str_detect(string = specific_data_directory, 
-                             pattern = "LVL4") 
+                                      pattern = "LVL4") 
 
 if (lvl4_bool_data) {
   FC_UPPER_BOUND <- 1.1
@@ -215,27 +215,21 @@ my_data_obj_final <- tibble(
   )
 )
 
+obj_final_fn <- file.path(data_directory, "analysis_ready-formatted_datasets.rds")
+if (!file.exists(obj_final_fn)) {
+  write_rds(my_data_obj_final, obj_final_fn)
+}
+
+
 # grab drugs from BOTH P100 and GCP
-my_temp_obj <- bind_rows(my_data_obj_final$data) %>%
+all_data <- bind_rows(my_data_obj_final$data) %>%
   ungroup()
 
-HUVEC_HAoSMC_perts <- my_temp_obj %>%
-  filter(cell_id %in% vascular_char_vec) %>%
-  ungroup() %>%
-  dplyr::select(pert_iname) %>%
-  .$pert_iname %>%
-  unique()
+# run get_drugs.R first to generate the appropriate files in the appropriate place!
+my_perts_df <- read_rds(file.path(data_directory, "perturbation_data", "my_perts.rds"))
+my_perts <- my_perts_df$pert_iname
 
-other_perts <- my_temp_obj %>%
-  ungroup() %>%
-  filter(!(cell_id %in% vascular_char_vec)) %>%
-  distinct(pert_iname) %>%
-  .$pert_iname
-
-my_perts <- intersect(HUVEC_HAoSMC_perts, other_perts); my_perts
-
-
-all_drugs_mapping <- my_temp_obj %>%
+all_drugs_mapping <- all_data %>%
   distinct(pert_iname) %>%
   filter(pert_iname %in% my_perts)
 

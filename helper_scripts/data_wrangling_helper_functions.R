@@ -104,11 +104,11 @@ read_and_summarize_data <- function(l, dtype_) {
       cell_id = ifelse(cell_id == "Pericytes", "Pericyte", cell_id),
       pert_iname = tolower(pert_iname)
     ) %>%
+    mutate(pert_iname = ifelse(pert_iname == "dmso", toupper(pert_iname), pert_iname)) %>%
     mutate(pert_iname = str_trim(str_replace(pert_iname, pattern = "\\(chembl1797936\\)", ""), "both")) %>%
     # do not include MCF10A
     dplyr::filter(cell_id != "MCF10A") %>%
-    mutate(det_normalization_group_vector = as.character(det_normalization_group_vector),
-           pert_iname = ifelse(pert_iname == "dmso", toupper(pert_iname), pert_iname)) %>%
+    mutate(det_normalization_group_vector = as.character(det_normalization_group_vector)) %>%
     ## inner join to only do drugs that I pick!!
     left_join(drugs_moa_df, by = "pert_iname") %>%
     dplyr::rename( 
@@ -124,6 +124,8 @@ read_and_summarize_data <- function(l, dtype_) {
     distinct(replicate_id, pr_gene_symbol, value, .keep_all = TRUE) 
   message("Removed MCF10A cells...")
 
+  peptide_mod_dir <- file.path(data_directory, "peptide_modification_data")
+  dir.create(peptide_mod_dir, showWarnings = F, recursive = T)
   if ("pr_gcp_histone_mark" %in% colnames(res_temp)) {
     # no need to do unique names for the histones...
 
@@ -137,11 +139,10 @@ read_and_summarize_data <- function(l, dtype_) {
       ungroup()
     
     write_tsv(res %>% distinct(pr_gene_symbol, pr_gcp_histone_mark), 
-              file = file.path(data_directory, "GCP-genes_with_marks_and_peptides.tsv"))
+              file = file.path(peptide_mod_dir, "GCP-genes_with_marks_and_peptides.tsv"))
     
   } else {
     
-    # This needs to be modified - I am seeing duplicate entries!!!
     unique_gene_names_df <- res_temp %>% 
       ungroup() %>% 
       distinct(pr_gene_symbol, pr_p100_phosphosite, pr_p100_modified_peptide_code) %>% 
@@ -153,7 +154,7 @@ read_and_summarize_data <- function(l, dtype_) {
       ungroup(); unique_gene_names_df
     
     write_tsv(unique_gene_names_df, 
-              file = file.path(data_directory, "P100-genes_with_phospho_marks_and_peptides.tsv"))
+              file = file.path(peptide_mod_dir, "P100-genes_with_phospho_marks_and_peptides.tsv"))
     
     res_temp2 <- res_temp %>%
       rename(mark = pr_p100_phosphosite) %>%

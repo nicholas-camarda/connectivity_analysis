@@ -19,25 +19,10 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   exclude_msg <- ifelse(exclude == "", "Nothing", exclude)
   message("Excluding: ", exclude_msg)
   
-  HUVEC_HAoSMC_perts <- my_obj %>%
-    filter(cell_id %in% vascular_char_vec) %>%
-    ungroup() %>%
-    dplyr::select(pert_iname) %>%
-    .$pert_iname %>%
-    unique()
-  
-  other_perts <- my_obj %>%
-    ungroup() %>%
-    filter(!(cell_id %in% vascular_char_vec)) %>%
-    distinct(pert_iname) %>%
-    .$pert_iname
-  
-  my_perts <- intersect(HUVEC_HAoSMC_perts, other_perts); my_perts
-  
   sub_obj_temp <- my_obj %>%
     # non-standard evaluation to find column for group
-    # and filter
-    # filter for only perts that show in both cancer and vascular
+    # filter for only my_perts that show in both cancer and vascular, 
+    # which is defined in init.R
     filter(pert_iname %in% my_perts) %>%
     filter(!!sym(grouping_var) %in% filter_vars) %>%
     # if we are excluding perts, make sure this runs

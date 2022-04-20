@@ -741,7 +741,7 @@ plot_diffe_results <- function(args){
                        seed = 42,
                        alpha = 0.7,
                        direction = "both", # direction to adjust labels, x, y, both
-                       verbose = TRUE,
+                       verbose = FALSE, # for debugging
                        size = rel_size_label,
                        max.iter = 1e9,
                        segment.size = rel_segment_size,
@@ -769,7 +769,7 @@ plot_diffe_results <- function(args){
                        seed = 42,
                        alpha = 0.7,
                        direction = "both", # direction to adjust labels, x, y, both
-                       verbose = TRUE,
+                       verbose = FALSE, # for debugging
                        size = rel_size_label,
                        max.iter = 1e9,
                        segment.size = rel_segment_size,
@@ -834,13 +834,11 @@ plot_diffe_results <- function(args){
       return(r)
     })) %>% 
     filter(keep_); new_sig
-  # mutate(vascular_str_name_idx = str_locate(base_clust_comp_name, pattern = "HUVEC|HAoSMC"),
-  #        keep_ = ifelse(!is.na(vascular_str_name_idx), T, F)) %>%
-  # dplyr::filter(keep_)
+
   groups <- unique(new_main$base_clust_comp_name)
   
-  # stop()
-  diffe_g_vasc <- lapply(groups, FUN = function(g) {
+  message("Plotting volcano, aligning labels to avoid overlap...")
+  diffe_g_vasc <- future_map(groups, .f = function(g) {
     ndf <- filter(new_main, base_clust_comp_name == g)
     nns <- filter(new_sig, base_clust_comp_name == g)
     res <- plot_diffe_all(diffe_final_res = ndf, to_plot_signif_df_final = nns, 
