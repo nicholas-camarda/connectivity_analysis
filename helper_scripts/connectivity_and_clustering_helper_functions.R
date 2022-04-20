@@ -610,7 +610,7 @@ run_diffe <- function(dat, cob, dname) {
         p_val_boot_bh = p.adjust(ks_boot$ks.boot.pvalue, method = "BH")
       ) %>%
         # determine significance of comparison based on bh_thresh
-        mutate(signif = p_val_boot_bh < bh_thresh_val) %>%
+        mutate(signif = p_val_bh < bh_thresh_val) %>%
         mutate(
           k_clust_dat = list(c1),
           all_others_dat = list(c2)
