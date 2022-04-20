@@ -183,7 +183,7 @@ read_and_summarize_data <- function(l, dtype_) {
   
   plot_dir <- file.path(output_directory, dtype_, "summary")
   dir.create(plot_dir, recursive = T, showWarnings = F)
-  ggsave(g, filename = file.path(plot_dir, qq("@{dtype_}-gene_values-all.pdf")),
+  ggsave(g, filename = file.path(plot_dir, qq("@{dtype_}-gene_values-all.png")),
          width = 20, height = 10)
   
   return(res)

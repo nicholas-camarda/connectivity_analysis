@@ -10,6 +10,7 @@ get_usable_data_plot <- function(data_ = NA, dataset_type = "P100",
   
   # get number of NON NA's per drug, by cell id
   # essentially a summary of the workable data for each cell type and drug
+  message("Organizing data, counting usable data across cell types and perturbations...")
   usable_data_df <- data_ %>%
     filter(which_dat == dataset_type) %>%
     dplyr::select(cell_id, pert_iname, pert_class, pr_gene_symbol, value) %>%
@@ -39,7 +40,7 @@ get_usable_data_plot <- function(data_ = NA, dataset_type = "P100",
     })) %>%
     mutate(dataset_type) %>%
     ungroup()
-  
+  message("Done.")
   # scale the data for use in radar plot, proportion of usable data
   meta_dat <- usable_data_df %>% 
     dplyr::select(pert_iname, pert_class, data, dataset_type)
@@ -50,7 +51,7 @@ get_usable_data_plot <- function(data_ = NA, dataset_type = "P100",
   radar_plot_df_master <- bind_cols(meta_dat, scaled_dat) %>%
     filter(pert_class %in% conditions_to_show) %>%
     split(.$pert_class)
-  
+  message("Plotting radar plots...")
   grad_lst <- tibble(pert_class = names(radar_plot_df_master)) %>% 
     mutate(gplot = future_map(radar_plot_df_master, .f = function(df_){
       
@@ -61,7 +62,6 @@ get_usable_data_plot <- function(data_ = NA, dataset_type = "P100",
       dataset_type_ <- unique(df_$dataset_type)
       class_type <- unique(df_$pert_class)
       # print(class_type)
-      
       # whole graphs together
       grad <- ggradar(radar_plot_df, 
                       legend.title = class_type,
@@ -80,6 +80,7 @@ get_usable_data_plot <- function(data_ = NA, dataset_type = "P100",
         mutate(gplot = map(split_radar_plot_df, .f = function(r){
           pert_name <- unique(r$pert_iname)
           # print(pert_iname)
+          
           ggradar(r, 
                   grid.label.size = 4,
                   axis.label.size = 4,
@@ -97,28 +98,29 @@ get_usable_data_plot <- function(data_ = NA, dataset_type = "P100",
     mutate(name = names(gplot)) %>%
     pivot_wider(id_cols = pert_class, 
                 names_from = name, values_from = gplot)
+  message("Done.")
   
-  main_output_directory <- file.path(output_directory, dataset_type, "summary")
+  main_output_directory <- file.path(output_directory, dataset_type, "summary", "usable_data_by_pert_class")
   dir.create(main_output_directory, showWarnings = FALSE, recursive = TRUE)
-  by_pert_output_directory <- file.path(output_directory, dataset_type, "summary", "by_perturbation")
+  by_pert_output_directory <- file.path(output_directory, dataset_type, "summary", "usable_data_by_perturbation")
   dir.create(by_pert_output_directory, showWarnings = FALSE, recursive = TRUE)
   
-  message("Plotting main...")
+  message("Saving main plots...")
   grad_lst_main <- grad_lst %>%
     dplyr::select(pert_class, main) %>%
     mutate(output_fn = file.path(main_output_directory,
-                                 str_c(str_c(dataset_type,pert_class,sep = "-"),".pdf")))
-  future_walk2(grad_lst_main$main, as.list(grad_lst_main$output_fn), .f = function(x, y) ggsave(plot = x, filename = y, width = 10))
-  
-  message("Plotting by perturbation...")
+                                 str_c(str_c(dataset_type,pert_class,sep = "-"),".png")))
+  walk2(grad_lst_main$main, as.list(grad_lst_main$output_fn), .f = function(x, y) ggsave(plot = x, filename = y, width = 10))
+  message("Done.")
+  message("Saving by-perturbation plots...")
   grad_lst_pert <- grad_lst %>%
     dplyr::select(pert_class, by_pert) %>%
     unnest(c(by_pert)) %>%
     mutate(output_fn = file.path(by_pert_output_directory,
-                                 str_c(str_c(dataset_type, pert_iname,sep = "-"),".pdf")))
+                                 str_c(str_c(dataset_type, pert_iname,sep = "-"),".png")))
   
-  future_walk2(grad_lst_pert$gplot, as.list(grad_lst_pert$output_fn), .f = function(x, y) ggsave(plot = x, filename = y, width = 10))
-  
+  walk2(grad_lst_pert$gplot, as.list(grad_lst_pert$output_fn), .f = function(x, y) ggsave(plot = x, filename = y, width = 10))
+  message("Done.")
   return(grad_lst)
 }
 
