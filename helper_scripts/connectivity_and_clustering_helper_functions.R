@@ -291,6 +291,8 @@ run_clust <- function(mat, use_parallel = FALSE) {
     n_boot = 1000
   )
   
+  print(pv_obj)
+  
   # dendro_cut_thresh is global
   named_clusters <- generate_clusters(
     x = pv_obj,
