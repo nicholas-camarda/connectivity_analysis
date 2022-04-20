@@ -175,7 +175,7 @@ plot_heatmap <- function(args) {
   
   
   if (!co_clust & (clustered_with_others | !clustered_with_others)) {
-    message("Vascular cells clustered separately, alone or with other cells. Separating plots...")
+    message("Vascular cells clustered separately, alone or with other cells. Separating heatmap plots...")
     
     # extract significant analytes per cluster
     row_annots_df1 <- filter(
@@ -303,7 +303,7 @@ plot_heatmap <- function(args) {
       )
     ))
   } else {
-    message("Vascular cells clustered together with no other cells. Plotting once...")
+    message("Vascular cells clustered together with no other cells. Plotting heatmap once...")
     row_annots_df <- filter(
       row_annots_df_include_nonsig_all,
       str_detect(string = base_clust_comp_name, pattern = "HUVEC|HAoSMC"), signif

@@ -8,6 +8,7 @@ library(ggsci)
 library(ggforce)
 library(ggpubr)
 library(scales)
+library(ggradar)
 
 # colors
 library(RColorBrewer)
@@ -19,11 +20,6 @@ library(colorspace)
 library(cmapR)
 library(circlize)
 library(ComplexHeatmap)
-
-library(extrafont)
-# do this once
-# font_import()
-extrafont::fonts()
 
 # progress bar
 library(progressr)
@@ -55,7 +51,7 @@ args_fn_name <- "test_args.csv" # "all_args.csv"
 
 
 ## progress bar ##
-options(ggrepel.max.overlaps = Inf, error = recover)
+options(ggrepel.max.overlaps = Inf)
 handlers(global = TRUE) # no need to wrap every call with_progress
 handlers("progress")
 handlers(handler_progress(
@@ -176,6 +172,7 @@ analysis_dat_temp <- read_csv(analysis_fn,
 stopifnot(nrow(analysis_dat_temp) >= 1)
 
 my_data <- tibble(fns = dir(file.path(datasets_directory, specific_data_directory),
+                            pattern = "gct*",
                             full.names = T, recursive = T
 )) %>%
   distinct() %>%
@@ -199,7 +196,7 @@ file_summary_dat <- my_data %>%
   dplyr::select(dataset_type, plate, fns)
 
 fn_data_lst_dir <- file.path(data_directory, "datasets", specific_data_directory)
-message(qq("Wrote data file names to fn_lst.tsv in:\n@{fn_data_lst_dir}"))
+message(qq("Wrote data file names to fn_lst.tsv in:\n@{fn_data_lst_dir}\n"))
 write_tsv(file_summary_dat, file = file.path(fn_data_lst_dir, "fn_list.tsv"))
 
 # organize what was read in
@@ -218,9 +215,14 @@ my_data_obj_final <- tibble(
   )
 )
 
-obj_final_fn <- file.path(data_directory, "analysis_ready-formatted_datasets.rds")
+obj_final_fn <- file.path(data_directory, "datasets", 
+                          "combined-datasets", 
+                          "analysis_ready-formatted_datasets.rds")
 if (!file.exists(obj_final_fn)) {
+  message(qq("Writing combined dataset file to:\n@{obj_final_fn}\n"))
   write_rds(my_data_obj_final, obj_final_fn)
+} else {
+  message(qq("Combined dataset file stored in:\n@{obj_final_fn}\n"))
 }
 
 
@@ -229,9 +231,17 @@ all_data <- bind_rows(my_data_obj_final$data) %>%
   ungroup()
 
 # run get_drugs.R first to generate the appropriate files in the appropriate place!
-my_perts_df <- read_rds(file.path(data_directory, "perturbation_data", "my_perts.rds"))
+pert_fn <- file.path(data_directory, "perturbation_data", "my_perts.rds")
+if (file.exists(pert_fn)) {
+  message("Reading my_perts.rds ...\n")
+  my_perts_df <- read_rds(pert_fn)
+} else {
+  stop("Run get_drugs.R to get my_perts.rds\n")
+}
+
 my_perts <- my_perts_df$pert_iname
 
+# make perturbation mapping df now, then filter out drugs in analysis loop in connectivity-analysis.R
 all_drugs_mapping <- all_data %>%
   distinct(pert_iname) %>%
   filter(pert_iname %in% my_perts)
@@ -244,9 +254,4 @@ analysis_dat <- inner_join(
   by = "dataset_type"
 )
 
-grouping_var_for_summary <- unlist(analysis_dat_temp$grouping_var)
-filter_vars_for_summary <- unlist(analysis_dat_temp$filter_vars)
-get_drug_and_cell_summary_data(analysis_dat = analysis_dat, 
-                               output_dir = output_dir,
-                               filter_vars_for_summary, 
-                               grouping_var_for_summary)
+message("Files accumulated, ready for analysis\n")

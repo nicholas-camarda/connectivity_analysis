@@ -1,8 +1,5 @@
 library(tidyverse)
 
-all_data_split <- read_rds(file.path("data", "analysis_ready-formatted_datasets.rds"))
-all_data <- bind_rows(all_data_split$data) %>% ungroup()
-
 
 #' @note this function returns the 'valid' perturbations to be used in the analysis
 #' @param data_ all data, combined into one LONG dataframe 
@@ -21,12 +18,9 @@ get_analysis_perturbations <- function(data_ = NA, dataset_type = NA){
       d_ <- d %>%
         complete(cell_id = cell_id, 
                  cell_type = cell_type, 
-                 pr_gene_symbol = pr_gene_symbol) 
+                 pr_gene_symbol = pr_gene_symbol) ; d_
       
       r_long <- d_ %>%
-        complete(cell_id = cell_id, 
-                 cell_type = cell_type, 
-                 pr_gene_symbol = pr_gene_symbol) %>%
         group_by(cell_type, pr_gene_symbol) %>%
         summarize(is_not_na = sum(!is.na(value)), .groups = "keep"); r_long
       
@@ -49,6 +43,13 @@ get_analysis_perturbations <- function(data_ = NA, dataset_type = NA){
   return(res)
 }
 
+
+### Body ---
+
+all_data_split <- read_rds(file.path("data", "datasets", "combined-datasets", "analysis_ready-formatted_datasets.rds"))
+all_data <- bind_rows(all_data_split$data) %>% ungroup()
+
+### apply functions and get output ---
 p100_perts <- get_analysis_perturbations(data_ = all_data, dataset_type = "P100")
 p100_perts_edit <- p100_perts %>%
   dplyr::select(pert_iname, pert_class, dataset_type)
@@ -63,7 +64,7 @@ my_perts_df_temp <- bind_rows(p100_perts_edit, gcp_perts_edit) %>%
   mutate(keep = ifelse(pert_class == "Epigenetic" & !is.na(GCP), T,
                        ifelse(pert_class == "Kinase inhibitor" & !is.na(P100), T, 
                               ifelse(pert_class == "control", T, F))))
-# my_perts!
+# my_perts! ---
 my_perts_df <- my_perts_df_temp %>%
   filter(keep) %>%
   arrange(pert_class); my_perts_df

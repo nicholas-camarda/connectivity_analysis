@@ -1,7 +1,7 @@
 
 #' @note extract genes and sites based on list of genes, string
 extract_sites <- function(analysis_dat, lst_of_genes) {
-
+  
   res <- analysis_dat %>% 
     filter(dataset_type == "P100") %>%
     unnest(cols = c(data)) %>%
@@ -123,12 +123,12 @@ read_and_summarize_data <- function(l, dtype_) {
     # group_by(replicate_id, pr_gene_symbol) %>%
     distinct(replicate_id, pr_gene_symbol, value, .keep_all = TRUE) 
   message("Removed MCF10A cells...")
-
+  
   peptide_mod_dir <- file.path(data_directory, "peptide_modification_data")
   dir.create(peptide_mod_dir, showWarnings = F, recursive = T)
   if ("pr_gcp_histone_mark" %in% colnames(res_temp)) {
     # no need to do unique names for the histones...
-
+    
     res <- res_temp %>%
       mutate(pr_gcp_histone_mark = str_trim(pr_gcp_histone_mark,"both")) %>%
       mutate(mark = pr_gcp_histone_mark, 
@@ -149,8 +149,8 @@ read_and_summarize_data <- function(l, dtype_) {
       rename(mark = pr_p100_phosphosite) %>% 
       # group_by(pr_gene_symbol, pr_p100_phosphosite) %>%
       mutate(pr_gene_symbol_u = make.unique(str_c("p", str_c(mark, pr_gene_symbol, sep = " "), 
-                                                       sep = ""), 
-                                                 sep = "_")) %>%
+                                                  sep = ""), 
+                                            sep = "_")) %>%
       ungroup(); unique_gene_names_df
     
     write_tsv(unique_gene_names_df, 
@@ -159,7 +159,7 @@ read_and_summarize_data <- function(l, dtype_) {
     res_temp2 <- res_temp %>%
       rename(mark = pr_p100_phosphosite) %>%
       left_join(unique_gene_names_df, 
-      by = c("pr_gene_symbol", "mark", "pr_p100_modified_peptide_code")) %>%
+                by = c("pr_gene_symbol", "mark", "pr_p100_modified_peptide_code")) %>%
       rename(non_unique_pr_gene_symbol = pr_gene_symbol) %>%
       rename(pr_gene_symbol = pr_gene_symbol_u); res_temp2
     
@@ -174,18 +174,18 @@ read_and_summarize_data <- function(l, dtype_) {
   # load("debug/debug_dat/debug-summary.RData")
   # stop()
   
-  message("Plotting summary data...")
+  message("Plotting summary data across pr_gene_symbol...")
   g <- ggplot(res) +
     geom_boxplot(aes(x=pr_gene_symbol, y=value)) + # 
     theme_bw(base_size = 7) +
     theme(axis.text.x = element_text(size = rel(1.5), angle=90, hjust=1, vjust=1)) +
     ggtitle(dtype_) 
   
-  plot_dir <- file.path(output_directory, "summary")
+  plot_dir <- file.path(output_directory, dtype_, "summary")
   dir.create(plot_dir, recursive = T, showWarnings = F)
-  ggsave(g, filename = file.path(plot_dir, qq("@{dtype_}.pdf")),
+  ggsave(g, filename = file.path(plot_dir, qq("@{dtype_}-gene_values-all.pdf")),
          width = 20, height = 10)
-
+  
   return(res)
 }
 
@@ -396,48 +396,3 @@ read_and_merge_gcts <- function(parent_dir_fn,
 }
 
 
-
-
-get_drug_and_cell_summary_data <- function(analysis_dat, output_dir, 
-                                           filter_vars_for_summary,
-                                           grouping_var_for_summary) {
-
-  final_res <- lapply(1:length(grouping_var_for_summary), FUN = function(i) {
-    res <- analysis_dat %>%
-      slice(i) %>%
-      mutate(summary_cells = map(data, function(d){
-      # d = analysis_dat$data[[1]]
-      drugs_to_plot_df <- d %>%
-        filter(!!sym(grouping_var_for_summary[i]) == filter_vars_for_summary[i])
-      
-      table(drugs_to_plot_df$cell_id, drugs_to_plot_df$pert_iname)
-      
-      drugs_to_plot <- unique(drugs_to_plot_df$pert_iname); drugs_to_plot
-      
-      to_plot_n <- d %>%
-        dplyr::select(cell_id, pert_iname) %>%
-        group_by(cell_id, pert_iname) %>% 
-        tally() %>%
-        group_by(cell_id) %>%
-        mutate(freq = n / sum(n)) %>% 
-        arrange(cell_id, desc(freq)) %>%
-        filter(pert_iname %in% drugs_to_plot); to_plot_n
-      
-      
-      gbar <- ggbarplot(to_plot_n, x = "cell_id", y = "n", 
-                fill = "pert_iname", facet.by = "pert_iname", ggtheme = theme_bw()) +
-        ggtitle("Drugs used in all cell lines, count") + 
-        theme(axis.text.x = element_text(angle = 90))
-      
-      return(gbar)
-
-    })) %>%
-    mutate(exclude_label = map_chr(exclude, .f = function(x) ifelse(is.na(x), "no_excl", x) )) %>%
-    mutate(output_fn = file.path(dirname(output_dir), "summary", 
-                                 str_c(str_c(dataset_type, filter_vars, exclude_label, "cells", sep = "-"),".pdf")))
-    return(res)
-  }) %>%
-    bind_rows()
-  
-  walk2(final_res$summary_cells, as.list(final_res$output_fn), .f = function(x, y) ggsave(plot = x, filename = y))
-}
