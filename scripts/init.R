@@ -197,7 +197,10 @@ file_summary_dat <- my_data %>%
   mutate(fns = basename(fns)) %>%
   mutate(plate = str_extract(string = fns, pattern = "[P|p]late[0-9]*[a-z]*")) %>%
   dplyr::select(dataset_type, plate, fns)
-write_tsv(file_summary_dat, file = file.path(data_directory, "fn_list.tsv"))
+
+fn_data_lst_dir <- file.path(data_directory, specific_data_directory)
+message(qq("Wrote data file names to fn_lst.tsv in:\n@{fn_data_lst_dir}"))
+write_tsv(file_summary_dat, file = file.path(fn_data_lst_dir, "fn_list.tsv"))
 
 # organize what was read in
 my_data_lst <- my_data %>%
