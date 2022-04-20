@@ -610,7 +610,6 @@ run_diffe <- function(dat, cob, dname) {
         p_val_boot_bh = p.adjust(ks_boot$ks.boot.pvalue, method = "BH")
       ) %>%
         # determine significance of comparison based on bh_thresh
-        # use the BOOT p_val here, more accurate?
         mutate(signif = p_val_boot_bh < bh_thresh_val) %>%
         mutate(
           k_clust_dat = list(c1),
@@ -696,10 +695,10 @@ plot_diffe_results <- function(args){
   signif_df_final <- signif_df # %>% mutate(fc = mean_fc) # for mean
   
   sig_up_df <- signif_df_final %>% 
-    filter(neg_log10_p_val_boot_bh >= 1 & 
+    filter(neg_log10_p_val_bh >= 1 & 
              (fc >= FC_UPPER_BOUND))
   sig_down_df <- signif_df_final %>% 
-    filter(neg_log10_p_val_boot_bh >= 1 & 
+    filter(neg_log10_p_val_bh >= 1 & 
              (fc <= FC_LOWER_BOUND))
   
   to_plot_signif_df_final <- bind_rows(sig_up_df,sig_down_df) %>%
@@ -713,8 +712,8 @@ plot_diffe_results <- function(args){
     max_x_lim <- max(to_plot_signif_df_final$fc, na.rm = T) + 0.1
     
     filt_signif <- to_plot_signif_df_final %>% 
-      filter(neg_log10_p_val_boot_bh < Inf & neg_log10_p_val_boot_bh > -Inf) %>% 
-      .$neg_log10_p_val_boot_bh
+      filter(neg_log10_p_val_bh < Inf & neg_log10_p_val_bh > -Inf) %>% 
+      .$neg_log10_p_val_bh
     max_y_lim <- max(filt_signif, na.rm = T)
     
     rel_size_label <- rel(4.5)
@@ -722,11 +721,11 @@ plot_diffe_results <- function(args){
     rel_size_point <- rel(3)
     
     diffe_g <- ggplot(diffe_final_res) +
-      geom_point(aes(x = fc, y = neg_log10_p_val_boot_bh), # size = neg_log10_p_val_boot_bh
+      geom_point(aes(x = fc, y = neg_log10_p_val_bh), # size = neg_log10_p_val_bh
                  size = rel_size_point, shape = 21, color = "black", # filled circle with outline
       ) +
       geom_point(data = to_plot_signif_df_final,
-                 mapping = aes(x = fc, y = neg_log10_p_val_boot_bh, fill = fc), 
+                 mapping = aes(x = fc, y = neg_log10_p_val_bh, fill = fc), 
                  size = rel_size_point, shape = 21, color = "black") +
       geom_vline(
         xintercept = as.numeric(c(FC_LOWER_BOUND, FC_UPPER_BOUND)),
@@ -737,9 +736,9 @@ plot_diffe_results <- function(args){
         col = "orange", linetype = 6,
       ) +
       geom_label_repel(to_plot_signif_df_final %>% 
-                         filter(neg_log10_p_val_boot_bh >= 1 & 
+                         filter(neg_log10_p_val_bh >= 1 & 
                                   (fc >= FC_UPPER_BOUND)),
-                       mapping = aes(x = fc, y = neg_log10_p_val_boot_bh, 
+                       mapping = aes(x = fc, y = neg_log10_p_val_bh, 
                                      label = label_),
                        seed = 42,
                        alpha = 0.7,
@@ -765,9 +764,9 @@ plot_diffe_results <- function(args){
                        arrow = arrow(length = unit(0.0075, "npc"))) +
       
       geom_label_repel(to_plot_signif_df_final %>%
-                         filter(neg_log10_p_val_boot_bh >= 1 & 
+                         filter(neg_log10_p_val_bh >= 1 & 
                                   (fc <= FC_LOWER_BOUND)),
-                       mapping = aes(x = fc, y = neg_log10_p_val_boot_bh,
+                       mapping = aes(x = fc, y = neg_log10_p_val_bh,
                                      label = label_),
                        seed = 42,
                        alpha = 0.7,

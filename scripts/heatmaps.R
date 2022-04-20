@@ -679,7 +679,12 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
       annotation_legend_param = list(`Perturbation` = list(title = "Perturbation"))
     ) 
   }
- 
+  
+  
+  # save(list = ls(all.names = TRUE),
+  #            file = "debug/debug_dat/debug-p100.RData")
+  # stop()
+  
   # get top up and down
   # needs to be relative to 1
   top_up <- row_annots_df %>%
@@ -706,7 +711,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   # don't use the boot bh pvalue, use the regular - the boot one is rounded
   signif_log_q_for_bar_plot <- row_order_df$neg_log10_p_val_bh
   # signif_log_q <- row_order_df %>% mutate(`-log10(q)` = round(-log(p_val_bh, base = 10),5) ) %>% .$`-log10(q)`
-  signif_q_val <- format(row_order_df$p_val_boot_bh, digits = 3, scientific = TRUE)
+  signif_q_val <- format(row_order_df$p_val_bh, digits = 3, scientific = TRUE)
   extra_analyte_info_init <- row_order_df$mark
   
   # edit analyte information when talking about GCP
