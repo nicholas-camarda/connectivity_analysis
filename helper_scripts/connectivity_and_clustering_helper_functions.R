@@ -426,7 +426,6 @@ run_diffe <- function(dat, cob, dname) {
   dat_ <- dat %>%
     left_join(ca_df, by = c("cell_id"))
   
-  
   mat_tbl <- dat_ %>%
     dplyr::select(
       replicate_id, cell_id, pert_iname, pert_class,
@@ -539,7 +538,8 @@ run_diffe <- function(dat, cob, dname) {
       n_non_na_vec2 <- length(c2[!is.na(c2)]); n_non_na_vec2
       
       # if at least 1/3 of the results are missing, then quit
-      if (n_non_na_vec1/c1_length < (1/3) | n_non_na_vec2/c2_length < (1/3)) {
+      # if (n_non_na_vec1/c1_length < (1/3) | n_non_na_vec2/c2_length < (1/3)) {
+      if (n_non_na_vec1 < 1 | n_non_na_vec2 < 1) {
         # message("Not enough data to compute diffe for ", k)
         res <- tibble(
           analyte = k, 
