@@ -1,4 +1,4 @@
-# main libraries
+'# main libraries
 library(data.table)
 library(tidyverse)
 library(readxl)
@@ -129,12 +129,7 @@ source(file.path(working_directory, "helper_scripts", "data_wrangling_helper_fun
 source(file.path(working_directory, "helper_scripts", "get_analytes.R"), local = T)
 
 #' @note constants
-filter_analytes <- TRUE
-rerun_clustering <- TRUE; rerun_diffe <- TRUE;
-set_run_organization <- c("pert_iname", "drug_class", "all")
-cancer_vs_non_cancer <- TRUE; plot_morpheus_toggle <- FALSE
-dendro_cut_thresh <- 0.6; bh_thresh_val <- 0.1
-message(qq("\nLoaded env variables:\nfilter_analytes = @{filter_analytes}\nrerun_clustering = @{rerun_clustering}\nrerun_diffe = @{rerun_diffe}\nset_run_organization = @{str_c(set_run_organization, collapse=',')}\ncancer_vs_non_cancer = @{cancer_vs_non_cancer}\nplot_morpheus_toggle = @{plot_morpheus_toggle}\ndendro_cut_thresh = @{dendro_cut_thresh}\nbh_thresh_val = @{bh_thresh_val}\n\n"))
+source(file.path(working_directory, "scripts", "environment_constants.R"))
 
 #' @note load output directories
 p100_base_output_dir <- file.path(output_directory, "p100")
@@ -170,63 +165,65 @@ analysis_dat_temp <- read_csv(analysis_fn,
     exclude = map(exclude, collect_args)
   ) %>%
   left_join(dir_tbl, by = "dataset_type")
-
+# make sure we read in the analysis files correctly
 stopifnot(nrow(analysis_dat_temp) >= 1)
 
-my_data <- tibble(fns = dir(file.path(datasets_directory, specific_data_directory),
-                            pattern = "gct*",
-                            full.names = T, recursive = T
-)) %>%
-  distinct() %>%
-  mutate(gct = map(
-    .x = fns,
-    .f = parse_gctx
-  )) %>%
-  mutate(dataset_type = str_extract(string = fns, pattern = "GCP|P100")) %>%
-  arrange(desc(dataset_type)) %>%
-  mutate(data = map(.x = gct, .f = melt_gct)) %>%
-  inner_join(analysis_dat_temp, by = "dataset_type")
-
+# grab the inital listing of drugs and mechanism of action
 drugs_moa_df <- create_my_drugs_df(ref_dir = references_directory)
 
-# write summary file of data paths
-file_summary_dat <- my_data %>%
-  distinct(dataset_type, fns) %>%
-  dplyr::select(dataset_type, fns) %>%
-  mutate(fns = basename(fns)) %>%
-  mutate(plate = str_extract(string = fns, pattern = "[P|p]late[0-9]*[a-z]*")) %>%
-  dplyr::select(dataset_type, plate, fns)
-
-fn_data_lst_dir <- file.path(data_directory, "datasets", specific_data_directory)
-message(qq("Wrote data file names to fn_lst.tsv in:\n@{fn_data_lst_dir}\n"))
-write_tsv(file_summary_dat, file = file.path(fn_data_lst_dir, "fn_list.tsv"))
-
-# organize what was read in
-my_data_lst <- my_data %>%
-  split(.$dataset_type)
-dataset_type_col <- names(my_data_lst)
-
-
-message("Reading and summarizing data...")
-#' If you want to edit the raw data, edit in *read_and_summarize_data*
-my_data_obj_final <- tibble(
-  dataset_type = dataset_type_col,
-  # combine the data rows into a single dataset, and nest it
-  data = map2(my_data_lst, dataset_type,
-              .f = read_and_summarize_data
-  )
-)
-
-obj_final_fn <- file.path(data_directory, "datasets", 
-                          "combined-datasets", 
+# find the combined dataset, if not made - make it; if made, read it
+obj_final_fn <- file.path(data_directory, "datasets", "combined-datasets", 
                           "analysis_ready-formatted_datasets.rds")
 if (!file.exists(obj_final_fn)) {
+  message("Reading gct* files and melting into long form...")
+  my_data <- tibble(fns = dir(file.path(datasets_directory, specific_data_directory),
+                              pattern = "gct*",
+                              full.names = T, recursive = T
+  )) %>%
+    distinct() %>%
+    mutate(gct = map(
+      .x = fns,
+      .f = parse_gctx
+    )) %>%
+    mutate(dataset_type = str_extract(string = fns, pattern = "GCP|P100")) %>%
+    arrange(desc(dataset_type)) %>%
+    mutate(data = map(.x = gct, .f = melt_gct)) %>%
+    inner_join(analysis_dat_temp, by = "dataset_type")
+  
+  # write summary file of data paths
+  file_summary_dat <- my_data %>%
+    distinct(dataset_type, fns) %>%
+    dplyr::select(dataset_type, fns) %>%
+    mutate(fns = basename(fns)) %>%
+    mutate(plate = str_extract(string = fns, pattern = "[P|p]late[0-9]*[a-z]*")) %>%
+    dplyr::select(dataset_type, plate, fns)
+  
+  fn_data_lst_dir <- file.path(data_directory, "datasets", specific_data_directory)
+  write_tsv(file_summary_dat, file = file.path(fn_data_lst_dir, "fn_list.tsv"))
+  message(qq("Wrote data file names to fn_lst.tsv in:\n@{fn_data_lst_dir}\n"))
+  
+  # organize what was read in
+  my_data_lst <- my_data %>%
+    split(.$dataset_type)
+  dataset_type_col <- names(my_data_lst)
+  
+  message("Reading and summarizing data...")
+  #' If you want to edit the raw data, edit in *read_and_summarize_data*
+  my_data_obj_final <- tibble(
+    dataset_type = dataset_type_col,
+    # combine the data rows into a single dataset, and nest it
+    data = map2(my_data_lst, dataset_type,
+                .f = read_and_summarize_data
+    )
+  )
+  
   message(qq("Writing combined dataset file to:\n@{obj_final_fn}\n"))
   write_rds(my_data_obj_final, obj_final_fn)
 } else {
-  message(qq("Combined dataset file stored in:\n@{obj_final_fn}\n"))
+  message(qq("Data file names were written previously to fn_lst.tsv in:\n@{fn_data_lst_dir}\n"))
+  message(qq("Reading combined dataset file stored in:\n@{obj_final_fn}\n"))
+  my_data_obj_final <- read_rds(obj_final_fn)
 }
-
 
 # grab drugs from BOTH P100 and GCP
 all_data <- bind_rows(my_data_obj_final$data) %>%
@@ -264,7 +261,7 @@ if (filter_analytes){
                                                           perc_trash = 0.75) %>%
     rename(unfiltered_data = data, 
            data = pert_and_analyte_filtered_data)
-  output_directory <- str_c(output_directory, "_filtered", sep = "")
+  output_directory <- str_c(output_directory, "_filtered_analytes", sep = "")
   message(qq("New output directory [output_directory] = @{output_directory}"))
 } else {
   message("Running analysis on P100 and GCP, as is - ***no analyte filtering***!")

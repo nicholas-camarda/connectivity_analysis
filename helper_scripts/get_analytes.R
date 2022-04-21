@@ -6,10 +6,10 @@
 #' @param perc_trash threshold; if the percent of NA's is greater than this number for an analyte, remove it
 #' @return analysis_dat with an extra column *filtered_data* which should be renamed to *data* in init.R when filtered_analytes flag = TRUE
 get_analysis_dat_with_filtered_analytes <- function(data_split_ = NA, my_perts_df_ = NA, perc_trash = 0.75){
-  # data_split_ = analysis_dat; my_perts_df_ = my_perts_df
+  # data_split_ = analysis_dat_pre; my_perts_df_ = my_perts_df; perc_trash = 0.75
   
-  filt_lst_res <- apply(analysis_dat, 1, FUN = function(args){
-    # args <- analysis_dat[1,]; my_obj <- args$data[[1]]
+  filt_lst_res <- apply(data_split_, 1, FUN = function(args){
+    # args <- data_split_[1,]; my_obj <- args$data[[1]]
     grouping_var <- args$grouping_var
     filter_vars <- force_natural(args$filter_vars)
     if (any(is.na(force_natural(args$exclude)))) {
@@ -27,14 +27,13 @@ get_analysis_dat_with_filtered_analytes <- function(data_split_ = NA, my_perts_d
     return(res)
   }) 
   
-  analysis_dat_filtered_all <- analysis_dat %>% 
+  analysis_dat_filtered_all <- data_split_ %>% 
     bind_cols(tibble(perturbation_filtered_data = filt_lst_res))
   
   # i_ = 4
   analyte_and_pert_filtered_dat <- analysis_dat_filtered_all %>%
-    # slice(i_) %>%
     mutate(pert_and_analyte_filtered_data = map(perturbation_filtered_data, .f = function(d){
-      # d <- analysis_dat_filtered$filt[[3]]
+      # d <- analyte_and_pert_filtered_dat$perturbation_filtered_data[[3]]
       
       wide_d <- d %>%
         dplyr::select(replicate_id, cell_id, pert_iname, 
@@ -48,7 +47,7 @@ get_analysis_dat_with_filtered_analytes <- function(data_split_ = NA, my_perts_d
       analytes_in_huvec <- wide_d %>% filter(cell_id == "HUVEC") 
       remove_analytes_huvec <- tibble(frac_na = map_dbl(analytes_in_huvec, function(x) sum(is.na(x))/length(x)),
                              names = colnames(analytes_in_huvec)) %>%
-        filter(str_detect(names, "^p[A-Z]|^H3")) %>%
+        filter(str_detect(names, "^p[A-Z]|^H[3-4]")) %>%
         arrange(desc(frac_na)) %>%
         filter(frac_na > perc_trash); remove_analytes_huvec
       
@@ -60,7 +59,7 @@ get_analysis_dat_with_filtered_analytes <- function(data_split_ = NA, my_perts_d
       
       remove_analytes_haosmc <- tibble(frac_na = map_dbl(analytes_in_haosmc, function(x) sum(is.na(x))/length(x)),
                                        names = colnames(analytes_in_haosmc)) %>%
-        filter(str_detect(names, "^p[A-Z]|^H3")) %>%
+        filter(str_detect(names, "^p[A-Z]|^H[3-4]")) %>%
         arrange(desc(frac_na)) %>%
         filter(frac_na > perc_trash); remove_analytes_haosmc
       
@@ -73,7 +72,7 @@ get_analysis_dat_with_filtered_analytes <- function(data_split_ = NA, my_perts_d
       
       remove_analytes_nonvasc <- tibble(frac_na = map_dbl(analytes_in_nonvasc, function(x) sum(is.na(x))/length(x)),
                                         names = colnames(analytes_in_nonvasc)) %>%
-        filter(str_detect(names, "^p[A-Z]|H3")) %>%
+        filter(str_detect(names, "^p[A-Z]|^H[3-4]")) %>%
         arrange(desc(frac_na)) %>%
         filter(frac_na > perc_trash); remove_analytes_nonvasc
       
