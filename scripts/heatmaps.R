@@ -117,6 +117,7 @@ plot_heatmap <- function(args) {
   diff_ex_df <- args$diffe_lst %>%
     pluck(1)
   
+  # stop()
   # generate the row annotations
   row_annots_df_include_nonsig_all <- diff_ex_df %>%
     mutate(`-log10(q)` = -log(p_val_boot_bh, base = 10)) %>%
@@ -125,8 +126,8 @@ plot_heatmap <- function(args) {
                                -1 * ks_boot_statistic, 
                                ks_boot_statistic))
   
-  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-p100-heat-pre.RData")
-  # load("debug/debug_dat/debug-p100-heat-pre.RData")
+  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-p100-pre-heat.RData")
+  # load("debug/debug_dat/debug-p100-pre-heat.RData")
   # stop()
   
   
@@ -174,26 +175,30 @@ plot_heatmap <- function(args) {
   
   
   if (!co_clust & (clustered_with_others | !clustered_with_others)) {
-    message("Vascular cells clustered separately, alone or with other cells. Separating plots...")
+    message("Vascular cells clustered separately, alone or with other cells. Separating heatmap plots...")
     
     # extract significant analytes per cluster
     row_annots_df1 <- filter(
       row_annots_df_include_nonsig_all,
       str_detect(string = base_clust_comp_name, pattern = "HUVEC"), signif
     ); row_annots_df1
+    
     row_annots_df2 <- filter(
       row_annots_df_include_nonsig_all,
       str_detect(string = base_clust_comp_name, pattern = "HAoSMC"), signif
     ); row_annots_df2
     
-    # get the character vector of the cluster name
-    bccn1_char_vec <- str_extract(string = unique(row_annots_df1$base_clust_comp_name),
-                                  pattern = "HUVEC")
-    bccn2_char_vec <- str_extract(string = unique(row_annots_df2$base_clust_comp_name), 
-                                  pattern = "HAoSMC")
     
+    # get the 'vasc-centric' character vector of the cluster name, i.e. just HUVEC, or HAoSMC
+    bccn1_char_vec <- str_extract(string = unique(row_annots_df1$base_clust_comp_name),
+                                  pattern = "HUVEC"); bccn1_char_vec
+    bccn2_char_vec <- str_extract(string = unique(row_annots_df2$base_clust_comp_name), 
+                                  pattern = "HAoSMC"); bccn2_char_vec
+    
+    # this will be the full cluster name, i.e. A375, HUVEC, YAPC
     cell_id_huvec_clust_char_vec <- as.character(unique(str_split(unique(row_annots_df1$base_clust_comp_name), ",", simplify = T)))
     cell_id_huvec_clust_char_vec
+    
     cell_id_haosmc_clust_char_vec <- as.character(unique(str_split(unique(row_annots_df2$base_clust_comp_name), ",", simplify = T)))
     cell_id_haosmc_clust_char_vec
     
@@ -201,7 +206,7 @@ plot_heatmap <- function(args) {
       mutate(
         group = ifelse(cell_id %in% vascular_char_vec, cell_id, "Non-vascular"),
         cluster_name = ifelse(cell_id %in% cell_id_huvec_clust_char_vec, bccn1_char_vec,
-                              ifelse(cell_id %in% bccn2_char_vec, bccn2_char_vec, "Non-vascular")
+                              ifelse(cell_id %in% cell_id_haosmc_clust_char_vec, bccn2_char_vec, "Non-vascular")
         ),
         which_dat = dataset,
         grp_fac = factor(cluster_name,
@@ -216,11 +221,40 @@ plot_heatmap <- function(args) {
                               drop = F
     ]
     
+    #' #' @CHECK check og table
+    #' dat_tbl %>%
+    #' filter(cell_id == "HUVEC", pr_gene_symbol == "pS12 EIF4A3") %>%
+    #'   mutate(median_value = median(value, na.rm = TRUE)) %>%
+    #'   dplyr::select(pr_gene_symbol, cell_id, value, median_value)
+    #' 
+    #' #' @CHECK check mat
+    #' mat %>%
+    #'   rownames_to_column() %>%
+    #'   rename(analyte = rowname) %>%
+    #'   as_tibble() %>%
+    #'   pivot_longer(cols = colnames(.)[-1], names_to = 'joint') %>%
+    #'   separate(col = joint, into = c("joint2","replicate_id", "plate_id"), sep = "::") %>%
+    #'   separate(col = joint2, into = c("cell_id", "pert_iname","pert_class")) %>%
+    #'   filter(cell_id == "HUVEC", analyte == "pS12 EIF4A3") %>%
+    #'   mutate(median_value = median(value, na.rm = TRUE))
+    #' 
+    #' #' @CHECK check filtered_mat
+    #' filtered_test_mat1 %>%
+    #'  rownames_to_column() %>%
+    #'   rename(analyte = rowname) %>%
+    #'   as_tibble() %>%
+    #'   pivot_longer(cols = colnames(.)[-1], names_to = 'joint') %>%
+    #'   separate(col = joint, into = c("joint2","replicate_id", "plate_id"), sep = "::") %>%
+    #'   separate(col = joint2, into = c("cell_id", "pert_iname","pert_class")) %>%
+    #'   filter(cell_id == "HUVEC", analyte == "pS12 EIF4A3") %>%
+    #'   mutate(median_value = median(value, na.rm = TRUE))
+    
+    
     column_annots_df2 <- column_annots_df_temp %>%
       mutate(
         group = ifelse(cell_id %in% vascular_char_vec, cell_id, "Non-vascular"),
         cluster_name = ifelse(cell_id %in% cell_id_huvec_clust_char_vec, bccn1_char_vec,
-                              ifelse(cell_id %in% bccn2_char_vec, bccn2_char_vec, "Non-vascular")
+                              ifelse(cell_id %in% cell_id_haosmc_clust_char_vec, bccn2_char_vec, "Non-vascular")
         ),
         which_dat = dataset,
         grp_fac = factor(cluster_name, levels = c("Non-vascular", bccn1_char_vec, bccn2_char_vec))
@@ -232,6 +266,7 @@ plot_heatmap <- function(args) {
                               colnames(mat) %in% column_annots_df2$u_cell_id, 
                               drop = F]
     
+    # name the output FNs
     split_fn <- str_split(heatmap_output_fn, "\\.", simplify = T)
     heatmap_output_fn1 <- str_c(split_fn[, 1], qq("-@{bccn1_char_vec}."), split_fn[, 2], collapse = "")
     heatmap_output_fn2 <- str_c(split_fn[, 1], qq("-@{bccn2_char_vec}."), split_fn[, 2], collapse = "")
@@ -239,14 +274,18 @@ plot_heatmap <- function(args) {
     # stop()
     ht1_lst <- organize_and_plot_heatmap_subfunction(base_cell_id = "HUVEC",
                                                      filtered_test_mat = filtered_test_mat1,
-                                                     row_annots_df = row_annots_df1, column_annots_df = column_annots_df1,
-                                                     heatmap_output_fn = heatmap_output_fn1, title_var = grouping_var
+                                                     row_annots_df = row_annots_df1, 
+                                                     column_annots_df = column_annots_df1,
+                                                     heatmap_output_fn = heatmap_output_fn1, 
+                                                     title_var = grouping_var
     )
     
     ht2_lst <- organize_and_plot_heatmap_subfunction(base_cell_id = "HAoSMC",
                                                      filtered_test_mat = filtered_test_mat2,
-                                                     row_annots_df = row_annots_df2, column_annots_df = column_annots_df2,
-                                                     heatmap_output_fn = heatmap_output_fn2, title_var = grouping_var
+                                                     row_annots_df = row_annots_df2, 
+                                                     column_annots_df = column_annots_df2,
+                                                     heatmap_output_fn = heatmap_output_fn2, 
+                                                     title_var = grouping_var
     )
     
     return(list(
@@ -264,7 +303,7 @@ plot_heatmap <- function(args) {
       )
     ))
   } else {
-    message("Vascular cells clustered together with no other cells. Plotting once...")
+    message("Vascular cells clustered together with no other cells. Plotting heatmap once...")
     row_annots_df <- filter(
       row_annots_df_include_nonsig_all,
       str_detect(string = base_clust_comp_name, pattern = "HUVEC|HAoSMC"), signif
@@ -319,38 +358,39 @@ calc_ht_size <- function(ht, unit = "inches") {
 
 #' @note helper function for plotting heatmaps
 organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA, 
-                                                  filtered_test_mat,
-                                                  row_annots_df, column_annots_df,
-                                                  heatmap_output_fn, title_var = "pert_iname",
+                                                  filtered_test_mat = NA,
+                                                  row_annots_df = NA, column_annots_df = NA,
+                                                  heatmap_output_fn = NA, title_var = NA,
                                                   plot_cluster_bar = FALSE,
                                                   add_D_stat = FALSE) {
-  
-  analytes_ <- rownames(filtered_test_mat)
-  u_cell_id_ <- colnames(filtered_test_mat)
+  message("Plotting for: ", base_cell_id)
   cluster_ids <- column_annots_df %>%
     dplyr::distinct(cluster, cell_id, pert_iname, cluster_name, grp_fac) ; 
   
   # message(tail(cluster_ids))
-  
   reduced_long <- filtered_test_mat %>% 
+    rownames_to_column() %>%
+    rename(analytes = rowname) %>%
     as_tibble() %>%
-    rownames_to_column(var = "temp") %>%
-    bind_cols(tibble(analytes = analytes_)) %>%
-    dplyr::select(analytes, everything(), -temp) %>%
-    pivot_longer(all_of(u_cell_id_), names_to = "u_cell_id") %>%
-    separate(col = all_of(u_cell_id), into = c("cell_id", "pert_iname", "pert_class_and_batch"), sep = "--") %>%
-    separate(col = pert_class_and_batch, into = c("pert_class", "replicate", "plate_id"), sep = "::") %>%
+    pivot_longer(cols = colnames(.)[-1], names_to = 'joint') %>%
+    separate(col = joint, into = c("joint2","replicate_id", "plate_id"), sep = "::") %>%
+    separate(col = joint2, into = c("cell_id", "pert_iname","pert_class"), sep = "--")  %>%
     left_join(cluster_ids, by = c("cell_id", "pert_iname"))
-  
+
   reduced_tbl <- reduced_long %>%
-    group_by(analytes, cell_id, pert_iname) %>%
+    group_by(analytes, cell_id, pert_iname, cluster) %>%
     summarize(median_value = median(value, na.rm = T), .groups = "keep") %>%
     ungroup() %>%
+    # summarize(mean_value = mean(value, na.rm = T), .groups = "keep") %>%
     mutate(u_cell_id = str_c(cell_id, pert_iname, sep = "::")) %>%
-    pivot_wider(id_cols = analytes, names_from = u_cell_id, values_from = median_value)
+    dplyr::select(-cell_id, -pert_iname) %>%
+    pivot_wider(id_cols = analytes, 
+                names_from = u_cell_id, 
+                values_from = median_value); reduced_tbl
   
   reduced_mat <- reduced_tbl %>% dplyr::select(-analytes) %>% as.matrix()
-  rownames(reduced_mat) <- analytes_
+  rownames(reduced_mat) <- reduced_tbl$analytes
+  # reduced_mat["pS12 EIF4A3",]
   
   n_max_clust <- length(unique(cluster_ids$cluster))
   n_max_clust
@@ -367,15 +407,26 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
           toupper(which_dat),
           sep = " || "
     )
-  )
+  ); TITLE
   # set color breaks at quantiles
-  breaks <- sapply(rev(c(.05, .10, .30, .50, .70, .90, .95)), function(q) quantile(reduced_mat, q, na.rm = T, names = F))
-  col_fun <- colorRamp2(breaks = breaks, colors = brewer.pal(n = length(breaks), name = "RdYlBu"))
+  # qnts <- seq(0, 1, 0.125)
+  qnts <- c(0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95)
+  # qnts <- c(0.025, 0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95, 0.975)
+  # qnts <- c(0.001, 0.025, 0.05, 0.10, 0.50, 0.90, 0.95, 0.975, 0.999)
+  # qnts <- c(0.05, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.95)
+  #  c(0.001, 0.025, 0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95, 0.975, 0.999)
+  # qnts <- c(0.001, 0.025, 0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95, 0.975, 0.999)
+  # palette_colors <- diverge_hcl(n = length(qnts), h = c(260, 0), c = 81, l = c(30, 90), power = 1.5)
+  # palette_colors <- wes_palette("Zissou1", length(qnts), type = "continuous")
   
+  breaks <- sapply(rev(qnts), function(q) quantile(reduced_mat, q, na.rm = T, names = F))
+  palette_colors <- brewer.pal(n = length(breaks), name = "RdYlBu")
+  col_fun <- colorRamp2(breaks = breaks, colors = palette_colors)
   
+  # stop()
   # in the order of the grouping -> we need to adjust colors depending on group content
-  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-gcp-heat.RData")
-  # load("debug/debug_dat/debug-gcp-heat.RData")
+  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-p100-heat.RData")
+  # load("debug/debug_dat/debug-p100-heat.RData")
   # stop()
   
   informative_labels_lst <- create_informative_labels()
@@ -495,7 +546,8 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
     mutate(dom = factor(dom, levels = grp_factor_lvls),
            dom = droplevels(dom)) %>%
     arrange(dom, pert_iname) %>%
-    left_join(ildf %>% distinct(lbs, new_lbs), by = c("cell_id" = "lbs")); grp_color_df
+    left_join(ildf %>% distinct(lbs, new_lbs),
+              by = c("cell_id" = "lbs")); grp_color_df
   
   # grayish color for NA
   col_fun_annot1 <- grp_color_df$color # 1st group being closest to the labels on the right
@@ -522,14 +574,15 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
                                           "Drug Glossary_edited.xlsx")) %>%
     mutate(pert_iname = tolower(Drug), moa_simple = `MOA simplified`) %>%
     mutate(pert_iname = ifelse(pert_iname == "dmso", toupper(pert_iname), pert_iname)) %>%
-    dplyr::select(pert_iname, moa_simple) %>%
-    mutate(moa_simple = ifelse(is.na(moa_simple), "", moa_simple))
+    dplyr::select(pert_iname, moa_simple) %>% # Class
+    mutate(moa_simple = ifelse(is.na(moa_simple), "", moa_simple)) %>%
+    distinct()
   
   link_moa_to_pert <- tibble(pert_iname = perturbations_char_vec_temp) %>%
     left_join(extra_pert_info, by = "pert_iname") %>%
     rename(pert_iname_temp = pert_iname) %>%
     mutate(pert_iname = str_c(pert_iname_temp, " (", moa_simple, ")", 
-                              sep = ""))
+                              sep = "")) 
   
   perturbations_char_vec <- link_moa_to_pert$pert_iname
   n_u_perts <- length(unique(perturbations_char_vec))
@@ -557,12 +610,12 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
       str_c(str_trim(s, side = "both"), collapse = " ")})) %>%
     mutate(new_lbs = map2_chr(cell_id, new_lbs, .f = function(s, y) {
       res <- ifelse(str_detect(string = s, pattern = "HAoSMC"), 
-                            str_c(s, " (vascular SMC)", collapse = ""), 
-                            ifelse(str_detect(string = s, pattern = "HUVEC"), 
-                                   str_c(s, " (vascular EC)", collapse = ""), 
-                                   y))
+                    str_c(s, " (vascular SMC)", collapse = ""), 
+                    ifelse(str_detect(string = s, pattern = "HUVEC"), 
+                           str_c(s, " (vascular EC)", collapse = ""), 
+                           y))
       return(res)
-      })) %>%
+    })) %>%
     left_join(grp_colors, by = "cell_id") %>%
     mutate(color = ifelse(is.na(color), "#b6b6b6", color)) # grayish color for NA
   col_fun_annot3 <- cell_color_df$cell_individual_color # 1st group being closest to the labels on the right
@@ -628,7 +681,9 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   }
   
   
-  
+  # save(list = ls(all.names = TRUE),
+  #            file = "debug/debug_dat/debug-p100.RData")
+  # stop()
   
   # get top up and down
   # needs to be relative to 1
@@ -644,8 +699,12 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   row_order_df <- bind_rows(top_up, top_down)
   row_order_df
   
-  setdiff(rownames(filtered_test_mat), row_order_df$analyte)
-  setdiff(row_order_df$analyte,rownames(filtered_test_mat))
+  matrix_analyte_check <- sort(rownames(filtered_test_mat))
+  row_order_analyte_check <- sort(row_order_df$analyte)
+  
+  setdiff(matrix_analyte_check, row_order_analyte_check)
+  setdiff(row_order_analyte_check, matrix_analyte_check)
+  
   stopifnot(nrow(row_order_df) == nrow(filtered_test_mat))
   
   # annotations for right side (by row)
@@ -655,6 +714,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   signif_q_val <- format(row_order_df$p_val_bh, digits = 3, scientific = TRUE)
   extra_analyte_info_init <- row_order_df$mark
   
+  # edit analyte information when talking about GCP
   if (which_dat == "gcp") {
     extra_analyte_info_temp <- str_split(extra_analyte_info_init, 
                                          pattern = "me[0-9]*|ac[0-9]*|ph[0-9]*", 
@@ -727,8 +787,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   }
   
   d_statistics_vec <- round(row_order_df$d_stat_val, 3)
-  # fold change
-  fc_vec <- round(2^row_order_df$logFC, 3) # logFC is log_2
+  fc_vec <- round(2^row_order_df$logFC, 3) # logFC is median log_2
   
   color_fc_row_labels_df <- row_order_df %>%
     mutate(color = ifelse(fc < 1, "blue", "red")) %>%
@@ -738,11 +797,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   color_fc_border_row_labels <- color_fc_row_labels_df %>% .$border_color
   color_fc_border_row_thickness <- color_fc_row_labels_df %>% .$border_thickness
   
-  
-  # analytes_reordered_df <- row_order_df %>%
-  #   mutate(new_analyte_label = ifelse(signif_and_fold, str_c(analyte, " **"), analyte)) 
-  
-  analytes_reordered_labels <- str_split(row_order_df$analyte, "_", simplify = TRUE)[,1]
+  # change the way the analyte is represented
   analytes_reordered <- row_order_df$analyte
   
   if (which_dat == "gcp") {
@@ -750,7 +805,13 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
       left_join(mod_table, by = c("analyte" = "full_sites")) %>%
       mutate(new_analyte_label = mod_counts) %>%
       .$new_analyte_label
+  } else {
+    analytes_reordered_labels <- str_split(string = gsub(x = row_order_df$analyte, 
+                                                         pattern = "_1", replacement = "*"), 
+                                           pattern = " ",simplify = TRUE)[,2] 
   }
+  
+  
   if (add_D_stat & which_dat == "gcp") {
     # add d-stat, no site
     right_ha <- HeatmapAnnotation(
@@ -898,7 +959,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
       gap = unit(1.5, "mm") # gap between annotations
     )
   }
- 
+  
   
   
   # reorder the matrix with this -- this could also be done in the heatmap function;
@@ -908,78 +969,23 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   length(analytes_reordered)
   length(grp_color_df$unique_id)
   
-  reordered_mat_temp <- reduced_mat[analytes_reordered, grp_color_df$unique_id, drop = F]
-  reordered_mat <- apply(reordered_mat_temp, 2, FUN = as.numeric)
-  
-  
-  
-  # base_cell_indices <- which(grp_color_df$grp_fac == base_cell_id)
-  # base_grp_color <- unique(grp_color_df %>% filter(grp_fac == base_cell_id) %>% .$color)
-  # rest_cell_color <- "darkgray"
-  # rest_cell_indices <- which(grp_color_df$grp_fac != base_cell_id)
-  
-  # # scale of the boxplot annotation
-  # rg <- range(reordered_mat, na.rm = TRUE)
-  # rg[1] = rg[1] - (rg[2] - rg[1])* 0.02
-  # rg[2] = rg[2] + (rg[2] - rg[1])* 0.02
-  # 
-  # anno_multiple_boxplot = function(index) {
-  #   # rows of matrix
-  #   nr = length(index)
-  #   # message(nr)
-  #   pushViewport(viewport(xscale = rg, yscale = c(0.5, nr + 0.5)))
-  #   for(i in seq_along(index)) {
-  #     grid.rect(y = nr-i+1, height = 1, default.units = "native")
-  #     # first group
-  #     # grid.abline(intercept = 0, gp = gpar(lty = 3,lwd = 3, col = "red"))
-  #     grid.boxplot(reordered_mat[ index[i], base_cell_indices] %>% na.omit(),
-  #                  pos = nr-i+1 + 0.2,
-  #                  box_width = 0.4, size = unit(1, "mm"),
-  #                  gp = gpar(fill = base_grp_color),
-  #                  direction = "horizontal")
-  #     # second group
-  #     grid.boxplot(reordered_mat[ index[i], rest_cell_indices] %>% na.omit(),
-  #                  pos = nr-i+1 - 0.2,
-  #                  box_width = 0.4,
-  #                  size = unit(1, "mm"),
-  #                  gp = gpar(fill = rest_cell_color),
-  #                  direction = "horizontal")
-  #     
-  #   }
-  #   grid.xaxis(gp = gpar(fontsize = 8))
-  #   popViewport()
-  # }
-  
-  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-p100-heat.RData")
-  # load("debug/debug_dat/debug-p100-heat.RData")
-  # stop()
-  
-  # get max of finite values
-  # bar_plot_q_values <- signif_log_q_for_bar_plot
-  # bar_plot_q_values[is.infinite(bar_plot_q_values)] = max(bar_plot_q_values[is.finite(bar_plot_q_values)], na.rm = TRUE)
-  # 
-  # left_ha <- rowAnnotation(
-  #   boxplot = anno_multiple_boxplot,
-  #   `bar` = anno_barplot(bar_plot_q_values, 
-  #                        gp = gpar(fontsize = 8, fill = "darkgray"),
-  #                        axis_param = list(labels_rot = 0)),
-  #   width = unit(4, "cm"),
-  #   gap = unit(2, "mm"),
-  #   # annotation_name_rot = 45,
-  #   show_annotation_name = FALSE
-  #   # show_annotation_names = FALSE
-  # # signif_log_q_for_bar_plot)
-  #   # width = unit(4, "cm"),
-  #   # gap = unit(1.5, "mm")
-  #   # annotation_legend_param = list(`bar` = list(title = "Q-value"))
-  # )
-  # draw(left_ha)
-  
+  ### ORDER HERE!!! ###
+  reordered_mat <- reduced_mat[analytes_reordered, grp_color_df$unique_id, drop = F]
+
+  ### insert code for left-annotation here if you want to use it ###
   
   ht_opt$message = FALSE
   ht_opt$COLUMN_ANNO_PADDING <- unit(2, "mm")
   ht_opt$ROW_ANNO_PADDING <- unit(1, "mm")
   ht_opt$annotation_border <- TRUE
+  
+  # this IS the same as matrix_for_diffe, which is what differential analytes is computed on
+  # t2_reduced_long_ <- reduced_long %>% 
+  #   filter(analytes == "pS12 EIF4A3") %>%
+  #   arrange(cell_id) %>%
+  #   pluck("value")
+  
+  # check incoming matrix
   
   ht <- Heatmap(reordered_mat,
                 name = NAME,
@@ -987,7 +993,13 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
                 na_col = "gray",
                 top_annotation = top_ha,
                 right_annotation = right_ha,
+                
                 # left_annotation = left_ha,
+                
+                #' @note turn this on to draw in the values of each cell!
+                # cell_fun = function(j, i, x, y, width, height, fill) {
+                #   grid.text(sprintf("%.1f", reordered_mat[i, j]), x, y, gp = gpar(fontsize = 5))
+                # },
                 
                 # row_title = "Analyte",
                 row_title_side = "right",
@@ -1026,7 +1038,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
                 raster_device = "png",
                 rect_gp = gpar(col = "white", lwd = 0.7)) # outline heatmap with black line
   
-  # draw(ht)
+  draw(ht)
   # legend for cell lines
   
   lgd_cluster <- Legend(labels = group_order, 
@@ -1096,7 +1108,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
         )
       })
     }
-
+    
     # decorate_annotation("bar", {
     #   # grid.text("barplot", unit(-10, "mm"), just = "bottom", rot = 90)
     #   grid.lines(y=c(0, 1), unit(c(1, 1), "native"), 

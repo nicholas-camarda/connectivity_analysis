@@ -6,13 +6,11 @@ cat("\nReading and merging data...")
 #' the values in this data are Z-scores!!!
 
 #' TODO change this to [analysis_args.csv] when ready
-analysis_fn <- file.path(data_directory, "all_args.csv")
+analysis_fn <- file.path(data_directory, "test_args.csv")
 analysis_dat_temp <- read_csv(analysis_fn, comment = "#") %>%
   mutate_all(str_trim) %>%
-  mutate(filter_vars = map(filter_vars, collect_args)) %>%
-  left_join(dir_tbl, by = "dataset_type")
+  mutate(filter_vars = map(filter_vars, collect_args))
 
-dir_tbl
 #' @note read in both GCP and P100 since it's cheap, then analyze accordingly
 
 srilas_data <- tibble(fns = c( file.path(datasets_directory, p100_fn),
@@ -28,7 +26,8 @@ srilas_data_final <- srilas_data$data[[1]]%>%
   mutate(det_plate = str_extract(string = det_plate, pattern = "P-[0-9]*"))
 
 # read in all 
-my_data <- tibble(fns = dir(file.path(datasets_directory, "All-LINCS-data-LVL4"), full.names = T, recursive = T)) %>%
+my_data <- tibble(fns = dir(file.path(datasets_directory, 
+"All-LINCS-data-LVL4"), full.names = T, recursive = T)) %>%
   distinct() %>% 
   mutate(gct = map(
     .x = fns,

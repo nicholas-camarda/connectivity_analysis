@@ -291,6 +291,8 @@ run_clust <- function(mat, use_parallel = FALSE) {
     n_boot = 1000
   )
   
+  print(plot(pv_obj))
+  
   # dendro_cut_thresh is global
   named_clusters <- generate_clusters(
     x = pv_obj,
@@ -394,28 +396,17 @@ run_diffe_lst <- function(lst, clust_lst) {
 #' @param cob list obj containing results of clustering analysis
 #' @param dname grouping_var, e.g. Kinase inhibitor or dmso, for naming the plot
 run_diffe <- function(dat, cob, dname) {
-  # dat <- lst$`Kinase inhibitor`; cob <- clust_lst$`Kinase inhibitor`; dname <- "Kinase inhibitor";
-  
-  # base_output_dir <- lst$data
-  # which_dat <- "P100"
-  
-  
-  # stop()
-  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-gcp-epi-diffe.RData")
-  # load("debug/debug_dat/debug-gcp-epi-diffe.RData")
+  # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-diffe.RData")
+  # load("debug/debug_dat/debug-diffe.RData")
   # stop()
   
   which_dat <- unique(force_natural(dat$which_dat))
   message(qq("Computting differential expression on @{dname}, @{which_dat}"))
   
-  mat_tbl <- dat %>%
-    dplyr::select(replicate_id, cell_id, pert_iname, pert_class, pr_gene_symbol, value) %>%
-    ungroup()
-  
-  clust_assignments <- cob$cluster_assignments
+  clust_assignments <- cob$cluster_assignments; clust_assignments
   # join clusters and annotations
   ca_df_temp <- create_ca_df(ca = clust_assignments) %>%
-    rename(base_clust_comp = cluster)
+    rename(base_clust_comp = cluster); ca_df_temp
   
   # get cluster labels
   clust_label_df <- ca_df_temp %>%
@@ -431,74 +422,131 @@ run_diffe <- function(dat, cob, dname) {
   
   ca_df <- left_join(ca_df_temp, clust_label_df, by = "base_clust_comp"); ca_df
   
+  # assign the clustering details to the original dataset, with a new name now
   dat_ <- dat %>%
     left_join(ca_df, by = c("cell_id"))
   
-  clusts_int_vec <- clust_label_df$base_clust_comp
   
-  matrix_for_diffe <- mat_tbl %>%
-    left_join(ca_df, by = "cell_id") %>%
+  mat_tbl <- dat_ %>%
     dplyr::select(
       replicate_id, cell_id, pert_iname, pert_class,
       base_clust_comp, base_clust_comp_name, value, pr_gene_symbol
     ) %>%
+    ungroup(); mat_tbl
+  
+  # calculate the correct logFC's on mat_tbl
+  #' @param df_ is the mat_tbl df
+  #' @param i_clust is the ith cluster to be base_clust_comp, or the cluster
+  #' we are comparing everything else to
+  #' @return df containing logFC, fc, d_stat, and signif info
+  calculate_logFC_grouped <- function(df_ = NA, i_clust = NA){
+    # message(i_clust)
+    median_df <- df_ %>%
+      mutate(helper_cluster = ifelse(base_clust_comp == i_clust, 1, 0)) %>%
+      arrange(cell_id); median_df
+  
+    # get some extra info
+    extra_info_temp <- median_df %>%
+      group_by(helper_cluster, cell_id, pr_gene_symbol) %>%
+      summarize(gene_clust_median_val = median(value, na.rm = TRUE), .groups = "keep")
+    
+    # wide summarized info
+    # this is the median value of each cell_ID!
+    summarized_median_df_extr_info <- extra_info_temp %>%
+      pivot_wider(id_cols = pr_gene_symbol, 
+                  names_from = c(cell_id, helper_cluster), names_sep = "__", 
+                  values_from = gene_clust_median_val) %>%
+      ungroup(); summarized_median_df_extr_info
+    
+    # then make final df, combining cluster-specific medians and cell_id specific medians
+    summarized_median_df <- median_df %>%
+      group_by(helper_cluster, cell_id, pr_gene_symbol) %>%
+      summarize(gene_clust_median_val = median(value, na.rm = TRUE), .groups = "keep") %>%
+      pivot_wider(id_cols = pr_gene_symbol, 
+                  names_from = helper_cluster, names_sep = "__", 
+                  values_from = gene_clust_median_val,
+                  values_fn = function(x) median(x, na.rm= TRUE),
+                  names_prefix = "cluster_") %>%
+      ungroup() %>%
+      # join the extra info to main
+      left_join(summarized_median_df_extr_info, by = "pr_gene_symbol") %>%
+      rename(cluster_1_median = cluster_1, cluster_0_median = cluster_0) %>%
+      # base cluster minus everything ELSE
+      mutate(logFC = cluster_1_median - cluster_0_median,
+             fc = 2^logFC) %>%
+      rename(analyte = pr_gene_symbol) %>%
+      mutate(directional_stat = ifelse(logFC > 0, "++", "--")) 
+    # summarized_median_df
+    
+    # res <- list(logfc_df = summarized_median_df)
+    return(summarized_median_df)
+  }
+  
+  logFC_df <- clust_label_df %>%
+    mutate(x = list(mat_tbl)) %>% # just rep a tbl as a row in another tbl
+    mutate(res =  map2(.x = x, 
+                       .y = base_clust_comp, 
+                       .f = calculate_logFC_grouped)) %>%
+    dplyr::select(-x) %>%
+    unnest(c(res)) %>%
+    arrange(base_clust_comp, analyte); 
+  
+  
+  # then pivot for diffe ks.test calculations
+  matrix_for_diffe <- mat_tbl %>%
     pivot_wider(
       names_from = pr_gene_symbol,
       values_from = value,
-      values_fn = median
-    ) # need this in case dups with different values
+      values_fn = median # need this in case dups with different values, which there shouldn't be but...
+    ) ; matrix_for_diffe
   
   feature_names <- dat_ %>%
     ungroup() %>%
     .$pr_gene_symbol %>%
-    unique()
+    unique(); feature_names
   
+  clusts_int_vec <- clust_label_df$base_clust_comp; clusts_int_vec
   p2 <- progressr::progressor(steps = length(clusts_int_vec) * length(feature_names))
-  
-  message("Computing differential analytes..")
+
   diffe_by_clust_df <- map_df(clusts_int_vec, function(ith_cluster) {
-    # ith_cluster <- clusts_int_vec[4]
+    # ith_cluster <- clusts_int_vec[2]
     
     base_clust_comp_name <- clust_label_df %>%
-      dplyr::select(base_clust_comp, base_clust_comp_name) %>% # take the correct cluster naming convention column
       filter(base_clust_comp == ith_cluster) %>% # take the correct name according to the cluster integer
       distinct(base_clust_comp_name) %>% # non-vascular clusters need to get lumped together, we just want the unique cluster assign
-      pluck(1) # make it a character vector
+      pluck(1) ; base_clust_comp_name# make it a character vector
     
     message(str_c("\nCluster ID:", ith_cluster, "\n#", base_clust_comp_name, sep = " "))
     p2()
     
-    cluster_res <- map2_df(feature_names, ith_cluster, function(k, i) {
-      # k <- feature_names[1]; i <- ith_cluster[1]
-      #
+    # i want this result to be bound by rows! since each feature-cluster pair will be an 'observation'
+    cluster_res <- future_map2_dfr(feature_names, ith_cluster, function(k, i) {
+      # k <- feature_names[35]; i <- ith_cluster
       # DEBUG:
       # message(k)
       
       c1 <- matrix_for_diffe %>%
         filter(base_clust_comp == i) %>%
-        pluck(k)
+        pluck(k); c1
+      
       c2 <- matrix_for_diffe %>%
         filter(base_clust_comp != i) %>%
-        pluck(k)
+        pluck(k); c2
       
-      # dens_dat <- tibble(c = c(c1, c2), g = c(rep("c1", length(c1)), rep("c2", length(c2))))
-      # ggecdf(data = dens_dat, x = "c", color = "g", ggtheme = theme_bw(), palette = "jco")
+      c1_length <- length(c1)
+      c2_length <- length(c2)
+      n_non_na_vec1 <- length(c1[!is.na(c1)]); n_non_na_vec1
+      n_non_na_vec2 <- length(c2[!is.na(c2)]); n_non_na_vec2
       
-      n_non_na_vec1 <- length(c1[!is.na(c1)])
-      n_non_na_vec1
-      n_non_na_vec2 <- length(c2[!is.na(c2)])
-      n_non_na_vec2
-      
-      if (n_non_na_vec1 < 1 | n_non_na_vec2 < 1) {
+      # if at least 1/3 of the results are missing, then quit
+      if (n_non_na_vec1/c1_length < (1/3) | n_non_na_vec2/c2_length < (1/3)) {
         # message("Not enough data to compute diffe for ", k)
         res <- tibble(
-          analyte = k,
-          logFC = NA, base_clust_comp = as.integer(i),
+          analyte = k, 
+          base_clust_comp = as.integer(i),
           base_clust_comp_name = base_clust_comp_name,
           ks_statistic = NA,
           ks_boot_statistic = NA,
-          signal_to_noise_statistic = NA,
-          directional_stat = NA,
           p_val = NA, p_val_boot = NA,
           p_val_bh = NA,
           p_val_boot_bh = NA,
@@ -512,10 +560,7 @@ run_diffe <- function(dat, cob, dname) {
       }
       
       ks <- ks.test(c1, c2, alternative = "two.sided")
-      ks
       ks_boot <- ks.boot(c1, c2, nboots = 1000, alternative = "two.sided")
-      ks_boot
-      
       
       # LINCS espouses the concept of making different data levels available for public use.  Different data levels correspond different steps along our processing workflow.  The LINCS PCCSE levels are defined as follows:
       # Level 0 - Raw Mass Spectrometry Data (LCMS) - will be available through a chorusproject.org repository in the future
@@ -528,23 +573,7 @@ run_diffe <- function(dat, cob, dname) {
       # quantifies the distance between the empirical distribution of given two samples
       stat <- ks$statistic
       stat_boot <- ks_boot$ks$statistic
-      
-      c1_median <- median(c1, na.rm = T)
-      c1_median
-      c2_median <- median(c2, na.rm = T)
-      c2_median
-      
-      #' @note assumes data are already log transformed!!!
-      #' So a fold change is simply a difference, not a division!!
-      #' is this the correct way to calculate diffex??
-      #'
-      logfc <- median(c1, na.rm = T) - median(c2, na.rm = T)
-      logfc
-      d_stat <- ifelse(logfc > 0, "++", "--")
-      
-      min_x <- min(c(min(c1, na.rm = T), min(c2, na.rm = T)))
-      max_x <- max(c(max(c1, na.rm = T), max(c2, na.rm = T)))
-      
+  
       c1_names_df <- matrix_for_diffe %>%
         filter(base_clust_comp == i) %>%
         mutate(
@@ -566,22 +595,21 @@ run_diffe <- function(dat, cob, dname) {
       c2_names_df
       
       # compute signal to noise
-      mean_grp_diff <- mean(c1, na.rm = T) - mean(c2, na.rm = T)
-      sum_grp_sd <- sd(c2, na.rm = T) + sd(c1, na.rm = T)
-      signal_to_nose <- mean_grp_diff / sum_grp_sd
+      sum_grp_sd <- sd(c2, na.rm = T) + sd(c1, na.rm = T) # this is sd of log-transformed data
+      # signal_to_nose <- mean_logfc / sum_grp_sd
       
       #' @note I'm pretty sure we want to adjust the p-values per cluster comparison...
       res <- tibble(
-        analyte = k, logFC = logfc, base_clust_comp = i,
+        analyte = k, 
+        base_clust_comp = i,
         base_clust_comp_name = base_clust_comp_name,
         ks_statistic = stat,
         ks_boot_statistic = stat_boot,
-        signal_to_noise_statistic = signal_to_nose,
-        directional_stat = d_stat,
         p_val = ks$p.value, p_val_boot = ks_boot$ks.boot.pvalue,
         p_val_bh = p.adjust(ks$p.value, method = "BH"),
         p_val_boot_bh = p.adjust(ks_boot$ks.boot.pvalue, method = "BH")
       ) %>%
+        # determine significance of comparison based on bh_thresh
         mutate(signif = p_val_boot_bh < bh_thresh_val) %>%
         mutate(
           k_clust_dat = list(c1),
@@ -603,7 +631,6 @@ run_diffe <- function(dat, cob, dname) {
   
   stopifnot(nrow(diffe_by_clust_df) > 0)
   
-  
   phosphosite_meta <- dat_ %>%
     ungroup() %>%
     dplyr::distinct(pr_gene_symbol, pr_gene_id, mark) %>%
@@ -615,25 +642,16 @@ run_diffe <- function(dat, cob, dname) {
     # so that log doesn't cause inf
     # mutate(p_val_boot_bh = p_val_boot_bh + .Machine$double.xmin) %>%
     mutate(neg_log10_p_val_bh = -log10(p_val_bh),
-           neg_log10_p_val_boot_bh = -log10(p_val_boot_bh)) 
+           neg_log10_p_val_boot_bh = -log10(p_val_boot_bh)) %>%
+    # add in the correctly calculated logFC 
+    left_join(logFC_df, by = c("analyte", "base_clust_comp", "base_clust_comp_name")) %>%
+    # use the p-value significance and fold change to compute signif diff and fold change
+    mutate(signif_and_fold = ifelse(signif & (fc >= FC_UPPER_BOUND), TRUE,
+                                    ifelse(signif & (fc <= FC_LOWER_BOUND), TRUE, FALSE)))
   
-  if (tolower(which_dat) == "p100") {
-    diffe_final_res <- diffe_final_res_temp %>% 
-      mutate(label_ = str_c("p", str_c(mark, analyte, sep = " "), sep = "")) %>%
-      mutate(fc = 2^logFC) %>%
-      mutate(signif_and_fold = ifelse(signif & (fc >= FC_UPPER_BOUND), TRUE,
-                                      ifelse(signif & (fc < FC_LOWER_BOUND), TRUE, FALSE)
-      )) %>%
-      dplyr::select(signif_and_fold, signif, logFC, fc, everything())
-  } else {
-    diffe_final_res <- diffe_final_res_temp %>% 
-      mutate(label_ = analyte) %>%
-      mutate(fc = 2^logFC) %>%
-      mutate(signif_and_fold = ifelse(signif & (fc >= FC_UPPER_BOUND), TRUE,
-                                      ifelse(signif & (fc < FC_LOWER_BOUND), TRUE, FALSE)
-      )) %>%
-      dplyr::select(signif_and_fold, signif, logFC, fc, everything())
-  }
+  diffe_final_res <- diffe_final_res_temp %>% 
+    mutate(label_ = analyte) %>%
+    dplyr::select(signif_and_fold, signif, logFC, fc, analyte, everything()); diffe_final_res
   
   signif_df <- diffe_final_res %>%
     filter(signif_and_fold)
@@ -672,25 +690,28 @@ plot_diffe_results <- function(args){
     dname_title <- dname
   }
   
-  sig_up_df <- signif_df %>% 
+  #' *DECIDE WHETHER TO USE MEAN OR MEDIAN* - here we're using median if comments are active
+  diffe_final_res <- diffe_final_res # %>% mutate(fc = mean_fc) # for mean
+  signif_df_final <- signif_df # %>% mutate(fc = mean_fc) # for mean
+  
+  sig_up_df <- signif_df_final %>% 
     filter(neg_log10_p_val_bh >= 1 & 
              (fc >= FC_UPPER_BOUND))
-  sig_down_df <- signif_df %>% 
+  sig_down_df <- signif_df_final %>% 
     filter(neg_log10_p_val_bh >= 1 & 
              (fc <= FC_LOWER_BOUND))
   
-  to_plot_signif_df <- bind_rows(sig_up_df,sig_down_df) %>%
+  to_plot_signif_df_final <- bind_rows(sig_up_df,sig_down_df) %>%
     mutate(label_ = str_split(label_, "_", simplify = TRUE)[,1])
   
   # pretty breaks!! pretty_breaks
   # https://stackoverflow.com/questions/11335836/increase-number-of-axis-ticks
-  plot_diffe_all <- function(diffe_final_res, to_plot_signif_df, which_dat, dname_title) {
+  plot_diffe_all <- function(diffe_final_res, to_plot_signif_df_final, which_dat, dname_title) {
     
-    # stop()
-    min_x_lim <- min(to_plot_signif_df$fc, na.rm = T) - 0.1
-    max_x_lim <- max(to_plot_signif_df$fc, na.rm = T) + 0.1
+    min_x_lim <- min(to_plot_signif_df_final$fc, na.rm = T) - 0.1
+    max_x_lim <- max(to_plot_signif_df_final$fc, na.rm = T) + 0.1
     
-    filt_signif <- to_plot_signif_df %>% 
+    filt_signif <- to_plot_signif_df_final %>% 
       filter(neg_log10_p_val_bh < Inf & neg_log10_p_val_bh > -Inf) %>% 
       .$neg_log10_p_val_bh
     max_y_lim <- max(filt_signif, na.rm = T)
@@ -703,13 +724,7 @@ plot_diffe_results <- function(args){
       geom_point(aes(x = fc, y = neg_log10_p_val_bh), # size = neg_log10_p_val_bh
                  size = rel_size_point, shape = 21, color = "black", # filled circle with outline
       ) +
-      # make the scale fit the signif bar
-      # signif_df %>% 
-      # filter(neg_log10_p_val_bh >= 1 & 
-      #          (fc >= FC_UPPER_BOUND),
-      #        neg_log10_p_val_bh >= 1 & 
-      #          (fc <= FC_UPPER_BOUND)), 
-      geom_point(data = to_plot_signif_df,
+      geom_point(data = to_plot_signif_df_final,
                  mapping = aes(x = fc, y = neg_log10_p_val_bh, fill = fc), 
                  size = rel_size_point, shape = 21, color = "black") +
       geom_vline(
@@ -720,8 +735,7 @@ plot_diffe_results <- function(args){
         yintercept = as.numeric(-log10(0.1)),
         col = "orange", linetype = 6,
       ) +
-      geom_label_repel(to_plot_signif_df %>% 
-                         na.omit() %>%
+      geom_label_repel(to_plot_signif_df_final %>% 
                          filter(neg_log10_p_val_bh >= 1 & 
                                   (fc >= FC_UPPER_BOUND)),
                        mapping = aes(x = fc, y = neg_log10_p_val_bh, 
@@ -729,7 +743,7 @@ plot_diffe_results <- function(args){
                        seed = 42,
                        alpha = 0.7,
                        direction = "both", # direction to adjust labels, x, y, both
-                       verbose = TRUE,
+                       verbose = FALSE, # for debugging
                        size = rel_size_label,
                        max.iter = 1e9,
                        segment.size = rel_segment_size,
@@ -745,14 +759,11 @@ plot_diffe_results <- function(args){
                        force = 2,
                        nudge_x = 0.01,
                        nudge_y = 0.01,
-                       # nudge_y = assignments_up$nudge_y,
-                       # nudge_y = ifelse(sig_up_df$neg_log10_p_val_bh >= 3, -0.5, -0.2),
-                       # nudge_x = assignments_up$nudge_x,
                        xlim = c(1, max_x_lim),
                        ylim = c(0, max_y_lim+1),
                        arrow = arrow(length = unit(0.0075, "npc"))) +
       
-      geom_label_repel(to_plot_signif_df %>% na.omit() %>%
+      geom_label_repel(to_plot_signif_df_final %>%
                          filter(neg_log10_p_val_bh >= 1 & 
                                   (fc <= FC_LOWER_BOUND)),
                        mapping = aes(x = fc, y = neg_log10_p_val_bh,
@@ -760,11 +771,9 @@ plot_diffe_results <- function(args){
                        seed = 42,
                        alpha = 0.7,
                        direction = "both", # direction to adjust labels, x, y, both
-                       verbose = TRUE,
+                       verbose = FALSE, # for debugging
                        size = rel_size_label,
                        max.iter = 1e9,
-                       # max.time = 10,
-                       # segment.shape = -1,
                        segment.size = rel_segment_size,
                        segment.curvature = -0.6,
                        segment.square = TRUE,
@@ -776,8 +785,6 @@ plot_diffe_results <- function(args){
                        force = 2,
                        nudge_x = -0.01,
                        nudge_y = 0.01,
-                       # nudge_y = assignments_down$nudge_y,
-                       # nudge_x = assignments_down$nudge_x,
                        xlim = c(min_x_lim-0.25, 1),
                        ylim = c(0, max_y_lim+1),
                        arrow = arrow(length = unit(0.0075, "npc"))) +
@@ -801,37 +808,42 @@ plot_diffe_results <- function(args){
             axis.text.y = element_text(size = rel(2.5), angle = 45),
             axis.text.x = element_text(size = rel(2.5), angle = 45,  vjust = 0.5)
       ) +
-      # guides(size = FALSE) +
       labs(
-        # color = "Directional change",
         caption = "BH.q.val = Benjamini-Hochberg-Corrected P-value (q) \nCut-off for displaying label: q < 0.1 \nDifference between groups calculated using ks.test()"
       ) +
       ylab("-Log10(BH.q.val)") +
-      xlab("Ratio of median Fold Change\nbetween Clusters") +
+      xlab("Ratio of Median Fold Change\nbetween Clusters") +
       ggtitle(label = qq("@{toupper(which_dat)}, @{dname_title}")) 
     return(diffe_g)
   }
   
-  diffe_g <- plot_diffe_all(diffe_final_res, to_plot_signif_df, which_dat, dname_title) + 
+  diffe_g <- plot_diffe_all(diffe_final_res, to_plot_signif_df_final, which_dat, dname_title) + 
     facet_grid(~base_clust_comp_name, scales = "free"); diffe_g
   
   
   # for plotting just vascular cells later on
+  # discovered a weird silent bug that was only apparent on windows...
   new_main <- diffe_final_res %>%
-    mutate(vascular_str_name_idx = str_locate(base_clust_comp_name, pattern = "HUVEC|HAoSMC"),
-           keep_ = ifelse(!is.na(vascular_str_name_idx), T, F)) %>%
-    filter(keep_)
-  new_sig <- to_plot_signif_df %>%
-    mutate(vascular_str_name_idx = str_locate(base_clust_comp_name, pattern = "HUVEC|HAoSMC"),
-           keep_ = ifelse(!is.na(vascular_str_name_idx), T, F)) %>%
-    filter(keep_)
+    mutate(keep_ = map_lgl(base_clust_comp_name, .f = function(x) {
+      r <- ifelse(any(!is.na(str_locate(string = x, pattern = "HUVEC|HAoSMC"))), T, F)
+      return(r)
+    })) %>%
+    filter(keep_); new_main
+  
+  new_sig <- to_plot_signif_df_final %>%
+    mutate(keep_ = map_lgl(base_clust_comp_name, .f = function(x) {
+      r <- ifelse(any(!is.na(str_locate(string = x, pattern = "HUVEC|HAoSMC"))), T, F)
+      return(r)
+    })) %>% 
+    filter(keep_); new_sig
+
   groups <- unique(new_main$base_clust_comp_name)
   
-  # stop()
-  diffe_g_vasc <- lapply(groups, FUN = function(g) {
+  message("Plotting volcano, aligning labels to avoid overlap...")
+  diffe_g_vasc <- future_map(groups, .f = function(g) {
     ndf <- filter(new_main, base_clust_comp_name == g)
     nns <- filter(new_sig, base_clust_comp_name == g)
-    res <- plot_diffe_all(diffe_final_res = ndf, to_plot_signif_df = nns, 
+    res <- plot_diffe_all(diffe_final_res = ndf, to_plot_signif_df_final = nns, 
                           which_dat = which_dat, dname_title = dname_title) 
     return(res)
   }); diffe_g_vasc

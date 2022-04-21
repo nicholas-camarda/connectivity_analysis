@@ -1,67 +1,57 @@
+# main libraries
+library(data.table)
 library(tidyverse)
-library(ggrepel)
 library(readxl)
+
+library(ggrepel)
 library(ggsci)
-library(ggpubr)
 library(ggforce)
+library(ggpubr)
 library(scales)
-library(tidymodels)
+library(ggradar)
 
-library(xml2)
-library(XML)
-
+# colors
 library(RColorBrewer)
 library(randomcoloR)
 library(pals)
 library(colorspace)
 
-# bioconductor pacakges that need to be installed manually
-# if (!requireNamespace("BiocManager", quietly = TRUE))
-#   install.packages("BiocManager")
-# BiocManager::install(version = "3.13")
-# BiocManager::install(c("ComplexHeatmap", "cmapR", "circlize", "BiocParrellel"))
-# BiocManager::install(c("cmapR"))
+# bioconductor
 library(cmapR)
 library(circlize)
 library(ComplexHeatmap)
-library(BiocParallel)
 
-# for seg fault issues.. https://issueexplorer.com/issue/wch/extrafont/89
-library(extrafont)
-# do this once
-# font_import()
-# loadfonts(device="postscript")
-fonts()
-
-
-# clustering
-library(cluster)
-library(factoextra)
-library(dbscan)
-library(fpc)
-
+# progress bar
 library(progressr)
 
-library(minerva) # non-linear correlation analysis with mutual information theory
-library(matrixStats)
+# clustering and trees
 library(pvclust) # cluster stability, Lev's paper
 library(Matching)
-
 library(dendextend)
 
+# formatting
 library(GetoptLong)
 library(gridExtra)
+library(tictoc)
 
+# multicore configuration
+library(furrr)
+no_cores <- availableCores() - 1
+plan(multisession, workers = no_cores)
+
+# random seed set for global session
 set.seed(25)
 
-# specific_data_directory <- "vascular-data-LVL4"
-# args_fn_name <- "vascular_args.csv"
-specific_data_directory <- "All-LINCS-data-LVL4" 
-args_fn_name <- "all_args.csv"
+# name of output directory
+my_output_directory <-  "All-LINCS-data-LVL4" # "test-LVL4" #
+# name of data directory, should contain LVL3|4 info!
+specific_data_directory <- "All-LINCS-data-LVL4"
+# args.csv 
+args_fn_name <-  "all_args.csv"  # "test_args.csv" # "all_args.csv" 
 
 
 ## progress bar ##
-options(ggrepel.max.overlaps = Inf, error = recover)
+options(ggrepel.max.overlaps = Inf)
 handlers(global = TRUE) # no need to wrap every call with_progress
 handlers("progress")
 handlers(handler_progress(
@@ -71,28 +61,32 @@ handlers(handler_progress(
 ))
 ## progress bar ##
 
-
+## set up for multiple OS
 winos <- ifelse(grepl("windows", Sys.info()["sysname"], ignore.case = T), 1, 
                 ifelse(grepl("linux", Sys.info()["sysname"], ignore.case = T), 2, 0))
 if (winos == 1) {
+  # windows
   working_directory <- file.path(
     "C:", "Users", "ncama",
-    "OneDrive - Tufts", "phd", "ws"
+    "OneDrive - Tufts", "phd", "ws", "proteomics"
   )
 } else if (winos == 0) {
+  # mac
   working_directory <- file.path(
     "", "Users", "ncamarda",
     "OneDrive - Tufts", "phd", "ws", "proteomics"
   )
 } else {
+  # linux
   working_directory <- file.path(
     "", "home", "ncamarda93",
     "OneDrive - Tufts", "phd", "ws", "proteomics"
   )
 }
 
-lvl4_bool_data <- str_detect(string = specific_data_directory, 
-                             pattern = "LVL4") 
+# The level of data we are processing
+lvl4_bool_data <- stringr::str_detect(string = specific_data_directory, 
+                                      pattern = "LVL4") 
 
 if (lvl4_bool_data) {
   FC_UPPER_BOUND <- 1.1
@@ -110,7 +104,7 @@ if (lvl4_bool_data) {
   message("LVL3 data has ")
 }
 
-output_directory <- file.path(working_directory, str_c("output", specific_data_directory, sep = "_"))
+output_directory <- file.path(working_directory, str_c("output", my_output_directory, sep = "_"))
 data_directory <- file.path(working_directory, "data")
 
 setwd(working_directory)
@@ -132,11 +126,8 @@ source(file.path(working_directory, "scripts", "dendrograms.R"), local = T)
 source(file.path(working_directory, "scripts", "heatmaps.R"), local = T)
 source(file.path(working_directory, "helper_scripts", "connectivity_and_clustering_helper_functions.R"), local = T)
 source(file.path(working_directory, "helper_scripts", "data_wrangling_helper_functions.R"), local = T)
-# source(file.path(working_directory, "helper_scripts", "morpheus_helper_functions.R"), local = T)
-
 
 #' @note constants
-drug_bank_database_fn <- file.path(references_directory, "full database.xml")
 rerun_clustering <- TRUE; rerun_diffe <- TRUE;
 set_run_organization <- c("pert_iname", "drug_class", "all")
 cancer_vs_non_cancer <- TRUE; plot_morpheus_toggle <- FALSE
@@ -148,13 +139,10 @@ p100_base_output_dir <- file.path(output_directory, "p100")
 dir.create(p100_base_output_dir, recursive = T, showWarnings = F)
 gcp_base_output_dir <- file.path(output_directory, "gcp")
 dir.create(gcp_base_output_dir, recursive = T, showWarnings = F)
-avg_base_output_dir <- file.path(output_directory, "avg")
-dir.create(avg_base_output_dir, recursive = T, showWarnings = F)
 
 dir_tbl <- tribble(~dataset_type, ~output_dir,
                    "P100", p100_base_output_dir,
-                   "GCP", gcp_base_output_dir,
-                   "AVG", avg_base_output_dir)
+                   "GCP", gcp_base_output_dir)
 
 vascular_char_vec <- c("HUVEC", "HAoSMC", "Pericyte")
 
@@ -184,6 +172,7 @@ analysis_dat_temp <- read_csv(analysis_fn,
 stopifnot(nrow(analysis_dat_temp) >= 1)
 
 my_data <- tibble(fns = dir(file.path(datasets_directory, specific_data_directory),
+                            pattern = "gct*",
                             full.names = T, recursive = T
 )) %>%
   distinct() %>%
@@ -193,37 +182,31 @@ my_data <- tibble(fns = dir(file.path(datasets_directory, specific_data_director
   )) %>%
   mutate(dataset_type = str_extract(string = fns, pattern = "GCP|P100")) %>%
   arrange(desc(dataset_type)) %>%
-  # mutate(
-  #   ranked_gct = map(.x = gct, .f = cmapR::rank_gct, dim = "col"),
-  #   mat = map(.x = gct, .f = cmapR::mat),
-  #   ranked_mat = map(.x = ranked_gct, .f = cmapR::mat)
-  # ) %>%
   mutate(data = map(.x = gct, .f = melt_gct)) %>%
   inner_join(analysis_dat_temp, by = "dataset_type")
 
 drugs_moa_df <- create_my_drugs_df(ref_dir = references_directory)
 
-# read in shared plated IDs from Srila's data
-# run debug-dataset.R first!
-debug_fn <- file.path(working_directory, "debug/shared_plate_ids.tsv")
-shared_plate_id_df <- read_tsv(debug_fn,show_col_types = FALSE) %>%
-  arrange(shared_plate_ids)
-shared_plate_ids <- shared_plate_id_df$shared_plate_ids
-
+# write summary file of data paths
 file_summary_dat <- my_data %>%
   distinct(dataset_type, fns) %>%
   dplyr::select(dataset_type, fns) %>%
   mutate(fns = basename(fns)) %>%
   mutate(plate = str_extract(string = fns, pattern = "[P|p]late[0-9]*[a-z]*")) %>%
   dplyr::select(dataset_type, plate, fns)
-write_tsv(file_summary_dat, file = file.path(data_directory, "fn_list.tsv"))
+
+fn_data_lst_dir <- file.path(data_directory, "datasets", specific_data_directory)
+message(qq("Wrote data file names to fn_lst.tsv in:\n@{fn_data_lst_dir}\n"))
+write_tsv(file_summary_dat, file = file.path(fn_data_lst_dir, "fn_list.tsv"))
 
 # organize what was read in
 my_data_lst <- my_data %>%
   split(.$dataset_type)
 dataset_type_col <- names(my_data_lst)
 
+
 message("Reading and summarizing data...")
+#' If you want to edit the raw data, edit in *read_and_summarize_data*
 my_data_obj_final <- tibble(
   dataset_type = dataset_type_col,
   # combine the data rows into a single dataset, and nest it
@@ -232,35 +215,34 @@ my_data_obj_final <- tibble(
   )
 )
 
+obj_final_fn <- file.path(data_directory, "datasets", 
+                          "combined-datasets", 
+                          "analysis_ready-formatted_datasets.rds")
+if (!file.exists(obj_final_fn)) {
+  message(qq("Writing combined dataset file to:\n@{obj_final_fn}\n"))
+  write_rds(my_data_obj_final, obj_final_fn)
+} else {
+  message(qq("Combined dataset file stored in:\n@{obj_final_fn}\n"))
+}
+
+
 # grab drugs from BOTH P100 and GCP
-my_temp_obj <- bind_rows(my_data_obj_final$data) %>%
+all_data <- bind_rows(my_data_obj_final$data) %>%
   ungroup()
 
-# drugs_to_plot_df <- my_temp_obj %>%
-#   filter(!is.na(value)) %>%
-#   dplyr::select(cell_id, pert_iname, value) %>%
-#   pivot_wider(id_cols = pert_iname, names_from = cell_id, 
-#               values_from = value, 
-#               values_fn = median) %>%
-#   na.omit() 
-# my_perts <- drugs_to_plot_df$pert_iname
-HUVEC_HAoSMC_perts <- my_temp_obj %>%
-  filter(cell_id %in% vascular_char_vec) %>%
-  ungroup() %>%
-  dplyr::select(pert_iname) %>%
-  .$pert_iname %>%
-  unique()
+# run get_drugs.R first to generate the appropriate files in the appropriate place!
+pert_fn <- file.path(data_directory, "perturbation_data", "my_perts.rds")
+if (file.exists(pert_fn)) {
+  message("Reading my_perts.rds ...\n")
+  my_perts_df <- read_rds(pert_fn)
+} else {
+  stop("Run get_drugs.R to get my_perts.rds\n")
+}
 
-other_perts <- my_temp_obj %>%
-  ungroup() %>%
-  filter(!(cell_id %in% vascular_char_vec)) %>%
-  distinct(pert_iname) %>%
-  .$pert_iname
+my_perts <- my_perts_df$pert_iname
 
-my_perts <- intersect(HUVEC_HAoSMC_perts, other_perts); my_perts
-
-
-all_drugs_mapping <- my_temp_obj %>%
+# make perturbation mapping df now, then filter out drugs in analysis loop in connectivity-analysis.R
+all_drugs_mapping <- all_data %>%
   distinct(pert_iname) %>%
   filter(pert_iname %in% my_perts)
 
@@ -272,9 +254,4 @@ analysis_dat <- inner_join(
   by = "dataset_type"
 )
 
-grouping_var_for_summary <- unlist(analysis_dat_temp$grouping_var)
-filter_vars_for_summary <- unlist(analysis_dat_temp$filter_vars)
-get_drug_and_cell_summary_data(analysis_dat = analysis_dat, 
-                               output_dir = output_dir,
-                               filter_vars_for_summary, 
-                               grouping_var_for_summary)
+message("Files accumulated, ready for analysis\n")
