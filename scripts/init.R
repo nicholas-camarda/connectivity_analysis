@@ -43,11 +43,11 @@ plan(multisession, workers = no_cores)
 set.seed(25)
 
 # name of output directory
-my_output_directory <- "test-LVL4" #"All-LINCS-data-LVL4-analyte_not_fixed" # "test-LVL4" #
+my_output_directory <-  "All-LINCS-data-LVL4" # "test-LVL4" #
 # name of data directory, should contain LVL3|4 info!
 specific_data_directory <- "All-LINCS-data-LVL4"
 # args.csv 
-args_fn_name <-  "test_args.csv" # "all_args.csv"  # "test_args.csv" # "all_args.csv" 
+args_fn_name <-  "all_args.csv"  # "test_args.csv" # "all_args.csv" 
 
 
 ## progress bar ##
