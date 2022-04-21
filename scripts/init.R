@@ -126,13 +126,15 @@ source(file.path(working_directory, "scripts", "dendrograms.R"), local = T)
 source(file.path(working_directory, "scripts", "heatmaps.R"), local = T)
 source(file.path(working_directory, "helper_scripts", "connectivity_and_clustering_helper_functions.R"), local = T)
 source(file.path(working_directory, "helper_scripts", "data_wrangling_helper_functions.R"), local = T)
+source(file.path(working_directory, "helper_scripts", "get_analytes.R"), local = T)
 
 #' @note constants
+filter_analytes <- TRUE
 rerun_clustering <- TRUE; rerun_diffe <- TRUE;
 set_run_organization <- c("pert_iname", "drug_class", "all")
 cancer_vs_non_cancer <- TRUE; plot_morpheus_toggle <- FALSE
 dendro_cut_thresh <- 0.6; bh_thresh_val <- 0.1
-message(qq("\nLoaded env variables: \nrerun_clustering = @{rerun_clustering}\nrerun_diffe = @{rerun_diffe}\nset_run_organization = @{str_c(set_run_organization, collapse=',')}\ncancer_vs_non_cancer = @{cancer_vs_non_cancer}\nplot_morpheus_toggle = @{plot_morpheus_toggle}\ndendro_cut_thresh = @{dendro_cut_thresh}\nbh_thresh_val = @{bh_thresh_val}\n\n"))
+message(qq("\nLoaded env variables:\nfilter_analytes = @{filter_analytes}\nrerun_clustering = @{rerun_clustering}\nrerun_diffe = @{rerun_diffe}\nset_run_organization = @{str_c(set_run_organization, collapse=',')}\ncancer_vs_non_cancer = @{cancer_vs_non_cancer}\nplot_morpheus_toggle = @{plot_morpheus_toggle}\ndendro_cut_thresh = @{dendro_cut_thresh}\nbh_thresh_val = @{bh_thresh_val}\n\n"))
 
 #' @note load output directories
 p100_base_output_dir <- file.path(output_directory, "p100")
@@ -248,10 +250,25 @@ all_drugs_mapping <- all_data %>%
 
 
 # bind final object
-analysis_dat <- inner_join(
+analysis_dat_pre <- inner_join(
   analysis_dat_temp,
   my_data_obj_final, # my_data_obj_final
   by = "dataset_type"
 )
+
+if (filter_analytes){
+  message("Running analysis on P100 and GCP ***with analyte filtering***!")
+
+  analysis_dat <- get_analysis_dat_with_filtered_analytes(data_split_ = analysis_dat_pre, 
+                                                          my_perts_df_ = my_perts_df, 
+                                                          perc_trash = 0.75) %>%
+    rename(unfiltered_data = data, 
+           data = pert_and_analyte_filtered_data)
+  output_directory <- str_c(output_directory, "_filtered", sep = "")
+  message(qq("New output directory [output_directory] = @{output_directory}"))
+} else {
+  message("Running analysis on P100 and GCP, as is - ***no analyte filtering***!")
+  analysis_dat <- analysis_dat_pre
+}
 
 message("Files accumulated, ready for analysis\n")
