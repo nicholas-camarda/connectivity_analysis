@@ -42,13 +42,17 @@ plan(multisession, workers = no_cores)
 # random seed set for global session
 set.seed(25)
 
-# name of output directory
-my_output_directory <- "test-LVL4" # "All-LINCS-data-LVL4" # "test-LVL4" #
-# name of data directory, should contain LVL3|4 info!
-specific_data_directory <- "All-LINCS-data-LVL4"
-# args.csv 
-args_fn_name <- "all_args.csv"  # "test_args.csv" # "all_args.csv" 
 
+
+################### SESSION INFO ##################
+message("#############################################################")
+message("########## Running cell-cell connectivity analysis ##########")
+message("#############################################################\n")
+message(Sys.time())
+message()
+
+#' @note constants
+source(file.path("scripts", "environment_constants.R"))
 
 ## progress bar ##
 options(ggrepel.max.overlaps = Inf)
@@ -60,29 +64,6 @@ handlers(handler_progress(
   complete = "+"
 ))
 ## progress bar ##
-
-## set up for multiple OS
-winos <- ifelse(grepl("windows", Sys.info()["sysname"], ignore.case = T), 1, 
-                ifelse(grepl("linux", Sys.info()["sysname"], ignore.case = T), 2, 0))
-if (winos == 1) {
-  # windows
-  working_directory <- file.path(
-    "C:", "Users", "ncama",
-    "OneDrive - Tufts", "phd", "ws", "proteomics"
-  )
-} else if (winos == 0) {
-  # mac
-  working_directory <- file.path(
-    "", "Users", "ncamarda",
-    "OneDrive - Tufts", "phd", "ws", "proteomics"
-  )
-} else {
-  # linux
-  working_directory <- file.path(
-    "", "home", "ncamarda93",
-    "OneDrive - Tufts", "phd", "ws", "proteomics"
-  )
-}
 
 # The level of data we are processing
 lvl4_bool_data <- stringr::str_detect(string = specific_data_directory, 
@@ -97,24 +78,22 @@ if (lvl4_bool_data) {
 }
 message(qq("FC upper bound: @{FC_UPPER_BOUND}"))
 message(qq("FC lower bound: @{FC_LOWER_BOUND}"))
-message(qq("\nRunning analysis on @{specific_data_directory} data\n"))
+message(qq("\nRunning analysis on data contained in @{specific_data_directory} folder"))
 if (lvl4_bool_data) {
-  message("LVL4 data has been row normalized to the PLATE MEDIAN")
+  message("**LVL4** data has been row normalized to the PLATE MEDIAN\n")
 } else {
-  message("LVL3 data has ")
+  message("**LVL3** data\n")
 }
 
-output_directory <- file.path(working_directory, str_c("output", my_output_directory, sep = "_"))
-data_directory <- file.path(working_directory, "data")
-
-setwd(working_directory)
+output_directory_temp <- file.path(str_c("output", my_output_directory, sep = "_"))
+data_directory <- file.path("data")
 
 references_directory <- file.path(data_directory, "references")
 datasets_directory <- file.path(data_directory, "datasets")
 
 print_important_directories <- function() {
-  message(qq("\n\nWorking directory [working_directory] = @{working_directory}"))
-  message(qq("Output directory [output_directory] = @{output_directory}"))
+  # message(qq("\n\nWorking directory [working_directory] = @{getwd()}"))
+  message(qq("Output directory [output_directory] = @{output_directory_temp}"))
   message(qq("Cardio-oncology directory [data_directory] = @{data_directory}"))
   message(qq("References directory [references_directory] = @{references_directory}"))
   message(qq("Datasets directory [datasets_directory] = @{datasets_directory}"))
@@ -122,32 +101,25 @@ print_important_directories <- function() {
 print_important_directories()
 
 ## load helper functions ##
-source(file.path(working_directory, "scripts", "dendrograms.R"), local = T)
-source(file.path(working_directory, "scripts", "heatmaps.R"), local = T)
-source(file.path(working_directory, "helper_scripts", "connectivity_and_clustering_helper_functions.R"), local = T)
-source(file.path(working_directory, "helper_scripts", "data_wrangling_helper_functions.R"), local = T)
-source(file.path(working_directory, "helper_scripts", "get_analytes.R"), local = T)
+source(file.path("scripts", "dendrograms.R"), local = T)
+source(file.path("scripts", "heatmaps.R"), local = T)
+source(file.path("helper_scripts", "connectivity_and_clustering_helper_functions.R"), local = T)
+source(file.path("helper_scripts", "data_wrangling_helper_functions.R"), local = T)
+source(file.path("helper_scripts", "get_analytes.R"), local = T)
+source(file.path("helper_scripts", "get_drugs.R"), local = T)
 
-#' @note constants
-source(file.path(working_directory, "scripts", "environment_constants.R"))
 
 #' @note load output directories
-p100_base_output_dir <- file.path(output_directory, "p100")
+p100_base_output_dir <- file.path(output_directory_temp, "p100")
 dir.create(p100_base_output_dir, recursive = T, showWarnings = F)
-gcp_base_output_dir <- file.path(output_directory, "gcp")
+gcp_base_output_dir <- file.path(output_directory_temp, "gcp")
 dir.create(gcp_base_output_dir, recursive = T, showWarnings = F)
 
 dir_tbl <- tribble(~dataset_type, ~output_dir,
                    "P100", p100_base_output_dir,
                    "GCP", gcp_base_output_dir)
 
-vascular_char_vec <- c("HUVEC", "HAoSMC", "Pericyte")
-
 ##########################################
-
-
-p100_fn <- file.path("combined-datasets", "P100-All-Cell-Lines.gct")
-gcp_fn <- file.path("combined-datasets", "GCP All Cell Lines.gct")
 
 cat("\nReading and merging data...")
 #' @note cmapR help functions https://rdrr.io/github/cmap/cmapR/man/
@@ -174,6 +146,8 @@ drugs_moa_df <- create_my_drugs_df(ref_dir = references_directory)
 # find the combined dataset, if not made - make it; if made, read it
 obj_final_fn <- file.path(data_directory, "datasets", "combined-datasets", 
                           "analysis_ready-formatted_datasets.rds")
+# note what the filenames are that are going into the combined dataset
+fn_data_lst_dir <- file.path(data_directory, "datasets", specific_data_directory)
 if (!file.exists(obj_final_fn)) {
   message("Reading gct* files and melting into long form...")
   my_data <- tibble(fns = dir(file.path(datasets_directory, specific_data_directory),
@@ -198,7 +172,6 @@ if (!file.exists(obj_final_fn)) {
     mutate(plate = str_extract(string = fns, pattern = "[P|p]late[0-9]*[a-z]*")) %>%
     dplyr::select(dataset_type, plate, fns)
   
-  fn_data_lst_dir <- file.path(data_directory, "datasets", specific_data_directory)
   write_tsv(file_summary_dat, file = file.path(fn_data_lst_dir, "fn_list.tsv"))
   message(qq("Wrote data file names to fn_lst.tsv in:\n@{fn_data_lst_dir}\n"))
   
@@ -217,11 +190,11 @@ if (!file.exists(obj_final_fn)) {
     )
   )
   
-  message(qq("Writing combined dataset file to:\n@{obj_final_fn}\n"))
+  message(qq("Writing combined dataset file to: \n@{obj_final_fn}\n"))
   write_rds(my_data_obj_final, obj_final_fn)
 } else {
-  message(qq("Data file names were written previously to fn_lst.tsv in:\n@{fn_data_lst_dir}\n"))
-  message(qq("Reading combined dataset file stored in:\n@{obj_final_fn}\n"))
+  message(qq("Data files used in analysis stored in: @{fn_data_lst_dir}/fn_list.tsv"))
+  message(qq("Reading combined dataset file stored in: @{obj_final_fn}\n"))
   my_data_obj_final <- read_rds(obj_final_fn)
 }
 
@@ -232,10 +205,46 @@ all_data <- bind_rows(my_data_obj_final$data) %>%
 # run get_drugs.R first to generate the appropriate files in the appropriate place!
 pert_fn <- file.path(data_directory, "perturbation_data", "my_perts.rds")
 if (file.exists(pert_fn)) {
-  message("Reading my_perts.rds ...\n")
+  message("Reading my_perts.rds ...")
   my_perts_df <- read_rds(pert_fn)
+  message("Done.\n")
 } else {
-  stop("Run get_drugs.R to get my_perts.rds\n")
+  message("Couldn't find my_perts_df... preparing for conditions Epigenetic")
+  
+  ### apply functions and get output ---
+  p100_perts <- get_analysis_perturbations(data_ = all_data, dataset_type = "P100")
+  p100_perts_edit <- p100_perts %>%
+    dplyr::select(pert_iname, pert_class, dataset_type)
+  gcp_perts <- get_analysis_perturbations(data_ = all_data, dataset_type = "GCP")
+  gcp_perts_edit <- gcp_perts %>%
+    dplyr::select(pert_iname, pert_class, dataset_type)
+  
+  my_perts_df_temp <- bind_rows(p100_perts_edit, gcp_perts_edit) %>%
+    pivot_wider(id_cols = pert_iname:pert_class, 
+                names_from = dataset_type, 
+                values_from = dataset_type) %>%
+    # edit this area to pick which classes of perturbations we retain
+    mutate(keep = ifelse(pert_class == "Epigenetic" & !is.na(GCP), T,
+                         ifelse(pert_class == "Kinase inhibitor" & !is.na(P100), T, 
+                                ifelse(pert_class == "control", T, F))))
+  # my_perts! ---
+  my_perts_df <- my_perts_df_temp %>%
+    filter(keep) %>%
+    arrange(pert_class); my_perts_df
+  
+  # write all this info to files
+  pert_data_dir <- file.path(data_directory, "perturbation_data")
+  dir.create(pert_data_dir, showWarnings = F, recursive = T)
+  
+  # this is the one we'll use for the analysis
+  write_rds(my_perts_df, file.path(pert_data_dir, "my_perts.rds"))
+  
+  # these are helper files in case we want to look back
+  write_tsv(p100_perts %>% dplyr::select(-data), file.path(pert_data_dir, "p100_pert.tsv"))
+  write_rds(p100_perts, file.path(pert_data_dir, "p100_pert.rds"))
+  write_tsv(gcp_perts %>% dplyr::select(-data), file.path(pert_data_dir, "gcp_pert.tsv"))
+  write_rds(gcp_perts, file.path(pert_data_dir, "gcp_pert.rds"))
+  message("Done.\n")
 }
 
 my_perts <- my_perts_df$pert_iname
@@ -258,14 +267,16 @@ if (filter_analytes){
 
   analysis_dat <- get_analysis_dat_with_filtered_analytes(data_split_ = analysis_dat_pre, 
                                                           my_perts_df_ = my_perts_df, 
-                                                          perc_trash = 0.75) %>%
+                                                          perc_trash = percent_analyte_na_to_throwout) %>%
     rename(unfiltered_data = data, 
            data = pert_and_analyte_filtered_data)
-  output_directory <- str_c(output_directory, "_filtered_analytes", sep = "")
+  output_directory <- str_c(output_directory_temp, "_filtered_analytes", sep = "")
   message(qq("New output directory [output_directory] = @{output_directory}"))
 } else {
   message("Running analysis on P100 and GCP, as is - ***no analyte filtering***!")
   analysis_dat <- analysis_dat_pre
+  output_directory <- output_directory_temp
+  message(qq("Unchanged output directory [output_directory] = @{output_directory}"))
 }
 
-message("Files accumulated, ready for analysis\n")
+message("\nFiles accumulated, ready for analysis\n")

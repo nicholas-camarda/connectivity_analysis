@@ -807,7 +807,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
       .$new_analyte_label
   } else {
     analytes_reordered_labels <- str_split(string = gsub(x = row_order_df$analyte, 
-                                                         pattern = "_1", replacement = "*"), 
+                                                         pattern = "_[0-9]", replacement = "*"), 
                                            pattern = " ",simplify = TRUE)[,2] 
   }
   

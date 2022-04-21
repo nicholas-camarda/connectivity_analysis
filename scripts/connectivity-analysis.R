@@ -16,8 +16,8 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     exclude <- force_natural(args$exclude)
   }
   my_obj <- args$data
-  exclude_msg <- ifelse(exclude == "", "Nothing", exclude)
-  message("Excluding: ", exclude_msg)
+  exclude_msg <- ifelse(exclude == "", "None", exclude)
+ 
   
   sub_obj_temp <- my_obj %>%
     # non-standard evaluation to find column for group
@@ -30,6 +30,8 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   
   #' print some summary information about filtered obj
   print_helper_info(sub_obj_temp, grouping_var)
+  message("Excluding perturbations?: ", exclude_msg)
+  message()
   
   dir_name_df <- tibble(!!grouping_var := filter_vars) %>%
     mutate(new_filter_var = map_chr(

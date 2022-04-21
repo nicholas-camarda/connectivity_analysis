@@ -702,7 +702,7 @@ plot_diffe_results <- function(args){
              (fc <= FC_LOWER_BOUND))
   
   to_plot_signif_df_final <- bind_rows(sig_up_df,sig_down_df) %>%
-    mutate(label_ = str_split(label_, "_", simplify = TRUE)[,1])
+    mutate(label_ = str_replace(string = label_, pattern = "_[0-9]", replacement = "*"))
   
   # pretty breaks!! pretty_breaks
   # https://stackoverflow.com/questions/11335836/increase-number-of-axis-ticks
@@ -755,8 +755,8 @@ plot_diffe_results <- function(args){
                        box.padding = 0.2,
                        min.segment.length = 0,
                        point.padding = 0.8,
-                       force_pull = 0.5,
-                       force = 2,
+                       # force_pull = 0.5,
+                       force = 100,
                        nudge_x = 0.01,
                        nudge_y = 0.01,
                        xlim = c(1, max_x_lim),
@@ -781,8 +781,8 @@ plot_diffe_results <- function(args){
                        box.padding = 0.2,
                        min.segment.length = 0,
                        point.padding = 0.8,
-                       force_pull = 0.5,
-                       force = 2,
+                       # force_pull = 0.5,
+                       force = 100,
                        nudge_x = -0.01,
                        nudge_y = 0.01,
                        xlim = c(min_x_lim-0.25, 1),
