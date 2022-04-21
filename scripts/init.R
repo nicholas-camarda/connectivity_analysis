@@ -54,8 +54,10 @@ message()
 #' @note constants
 source(file.path("scripts", "environment_constants.R"))
 
-## progress bar ##
+# session options
 options(ggrepel.max.overlaps = Inf)
+
+## progress bar ##
 handlers(global = TRUE) # no need to wrap every call with_progress
 handlers("progress")
 handlers(handler_progress(
