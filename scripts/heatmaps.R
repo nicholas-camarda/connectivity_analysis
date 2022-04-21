@@ -1046,13 +1046,11 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   lgd_cell <- Legend(labels = unique(cell_names_char_vec), 
                      title = "Cell Line", 
                      legend_gp = gpar(fill = unique(col_fun_annot3)),  
-                     direction = "horizontal", 
-                     ncol = 2)
+                     direction = "horizontal") # ncol = 2
   lgd_pert <- Legend(labels = unique(perturbations_char_vec), 
                      title = "Perturbation", 
                      legend_gp = gpar(fill = unique(col_fun_annot2)),  
-                     direction = "horizontal", 
-                     ncol = 2)
+                     direction = "horizontal") # ncol = 2
   
   # lgd_box <- Legend(labels = c(base_cell_id, "All other clusters"), title = "Boxplots",
   #                   legend_gp = gpar(fill = c(base_grp_color, rest_cell_color)))

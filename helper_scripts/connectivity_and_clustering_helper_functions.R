@@ -58,6 +58,59 @@ run_corr_lst <- function(lst, tie_method = "average") {
   return(res)
 }
 
+#' @note this function finds and removes analytes that are not usable for analysis
+#' @param wide_df a wide df with pr_genes on columns and replicate Ids on rows
+#' @param perc_trash percent of data that is NA; if data has perc na greater than this, analyte gets tossed
+#' @return filtered wide df
+filter_analytes <- function(wide_df, perc_trash = 0.75){
+  # huvecs
+  analytes_in_huvec <- wide_df %>%
+    mutate(temp = replicate_id, .before = 1) %>%
+    separate(temp, into = c("cell_id", "pert_iname", "pert_class"), sep = "--") %>%
+    filter(cell_id %in% "HUVEC")
+  
+  remove_analytes_huvec <- tibble(frac_na = map_dbl(analytes_in_huvec, function(x) sum(is.na(x))/length(x)),
+                                 names = colnames(analytes_in_huvec)) %>%
+    filter(str_detect(names, "^p[A-Z]|^H3")) %>%
+    arrange(desc(frac_na)) %>%
+    filter(frac_na > perc_trash); remove_analytes_huvec
+  
+  # smooth
+  analytes_in_haosmc <- wide_df %>%
+    mutate(temp = replicate_id, .before = 1) %>%
+    separate(temp, into = c("cell_id", "pert_iname", "pert_class"), sep = "--") %>%
+    filter(cell_id %in% "HAoSMC")
+  
+  remove_analytes_haosmc <- tibble(frac_na = map_dbl(analytes_in_haosmc, function(x) sum(is.na(x))/length(x)),
+                                  names = colnames(analytes_in_haosmc)) %>%
+    filter(str_detect(names, "^p[A-Z]|^H3")) %>%
+    arrange(desc(frac_na)) %>%
+    filter(frac_na > perc_trash); remove_analytes_haosmc
+  
+  
+  # non-vascular
+  analytes_in_nonvasc <- wide_df %>%
+    mutate(temp = replicate_id, .before = 1) %>%
+    separate(temp, into = c("cell_id", "pert_iname", "pert_class"), sep = "--") %>%
+    filter(!(cell_id %in% vascular_char_vec))
+  
+  remove_analytes_nonvasc <- tibble(frac_na = map_dbl(analytes_in_nonvasc, function(x) sum(is.na(x))/length(x)),
+                                    names = colnames(analytes_in_nonvasc)) %>%
+    filter(str_detect(names, "^p[A-Z]|H3")) %>%
+    arrange(desc(frac_na)) %>%
+    filter(frac_na > perc_trash)
+  
+  remove_analytes <- bind_rows(remove_analytes_haosmc, remove_analytes_huvec,
+                               remove_analytes_nonvasc) %>%
+    distinct(names)
+  
+  res_x <- wide_df %>%
+    dplyr::select(-c(remove_analytes$names))
+  message(qq("Removed @{nrow(remove_analytes)} analytes..."))
+  return(res_x)
+}
+
+
 #' @note run correlation
 #' @param x long_form df from melt_gct(parse_gctx(.x))
 #' @param tie_method for computing the ranks, whether to do average or dense
@@ -70,14 +123,15 @@ run_corr <- function(x, tie_method = "average") {
   #
   # stop('debug')
   
-  wide_x <- x_ungrouped %>%
+  wide_x_temp <- x_ungrouped %>%
     dplyr::select(replicate_id, pr_gene_symbol, value) %>%
     pivot_wider(
       names_from = pr_gene_symbol,
       values_from = value,
-      values_fn = median
+      values_fn = function(x) median(x, na.rm = TRUE)
     )
-  wide_x
+  
+  wide_x <- filter_analytes(wide_df = wide_x_temp, perc_trash = 0.75)
   
   transposed_x <- wide_x %>%
     dplyr::select(-replicate_id) %>%
@@ -89,6 +143,8 @@ run_corr <- function(x, tie_method = "average") {
   # data has been log transformed, so must be spearman bc rho doesn't
   # change with monotonic transfromation; pearson DOES!
   res <- cor(transposed_x, method = "spearman", use = "pairwise.complete.obs")
+  
+  # would you filter out pr_gene_symbol with high NA here?
   
   rownames(res) <- wide_x$replicate_id
   colnames(res) <- wide_x$replicate_id
@@ -242,7 +298,6 @@ run_conn <- function(mat, use_bootstrap = FALSE) {
       cols = all_of(rnames),
       names_to = "group_b", values_to = "median_conn"
     )
-  
   
   return(list(
     "conn_tbl" = conn_df,
@@ -426,8 +481,29 @@ run_diffe <- function(dat, cob, dname) {
   dat_ <- dat %>%
     left_join(ca_df, by = c("cell_id"))
   
+  dat_wide <- dat_ %>%
+    dplyr::select(replicate_id, pr_gene_symbol, value) %>%
+    pivot_wider(
+      names_from = pr_gene_symbol,
+      values_from = value,
+      values_fn = function(x) median(x, na.rm= TRUE)
+    ); dat_wide
   
-  mat_tbl <- dat_ %>%
+  # this the filtered dataset we'll calculate ks and logFC from
+  matrix_for_diffe <- filter_analytes(wide_df = dat_wide, perc_trash = 0.75) %>%
+    left_join(dat_ %>% distinct(replicate_id, cell_id, pert_iname, 
+                                pert_class, base_clust_comp, 
+                                base_clust_comp_name), by = "replicate_id") %>%
+    dplyr::select(replicate_id, cell_id, pert_iname, 
+                  pert_class, base_clust_comp, 
+                  base_clust_comp_name, everything())
+
+  # get corrected original dat_ and call it dat_long_filtered
+  new_analytes <- colnames(matrix_for_diffe)[-c(1:6)]
+  dat_long_filtered <- dat_ %>% filter(pr_gene_symbol %in% new_analytes)
+
+  # create mat_tbl from this
+  mat_tbl <- dat_long_filtered %>%
     dplyr::select(
       replicate_id, cell_id, pert_iname, pert_class,
       base_clust_comp, base_clust_comp_name, value, pr_gene_symbol
@@ -444,7 +520,7 @@ run_diffe <- function(dat, cob, dname) {
     median_df <- df_ %>%
       mutate(helper_cluster = ifelse(base_clust_comp == i_clust, 1, 0)) %>%
       arrange(cell_id); median_df
-  
+    
     # get some extra info
     extra_info_temp <- median_df %>%
       group_by(helper_cluster, cell_id, pr_gene_symbol) %>%
@@ -482,6 +558,7 @@ run_diffe <- function(dat, cob, dname) {
     return(summarized_median_df)
   }
   
+  # run logFC calculation on filtered dataset mat_tbl
   logFC_df <- clust_label_df %>%
     mutate(x = list(mat_tbl)) %>% # just rep a tbl as a row in another tbl
     mutate(res =  map2(.x = x, 
@@ -491,23 +568,26 @@ run_diffe <- function(dat, cob, dname) {
     unnest(c(res)) %>%
     arrange(base_clust_comp, analyte); 
   
-  
+  # stop()
   # then pivot for diffe ks.test calculations
-  matrix_for_diffe <- mat_tbl %>%
-    pivot_wider(
-      names_from = pr_gene_symbol,
-      values_from = value,
-      values_fn = median # need this in case dups with different values, which there shouldn't be but...
-    ) ; matrix_for_diffe
+  # matrix_for_diffe_temp <- mat_tbl %>%
+  #   pivot_wider(
+  #     names_from = pr_gene_symbol,
+  #     values_from = value,
+  #     values_fn = function(x) median(x, na.rm= TRUE) # need this in case dups with different values, which there shouldn't be but...
+  #   ) ; matrix_for_diffe_temp
   
-  feature_names <- dat_ %>%
+  # grab feature names from filtered dataset
+  feature_names <- dat_long_filtered %>%
     ungroup() %>%
     .$pr_gene_symbol %>%
     unique(); feature_names
   
+  # stop()
+  
   clusts_int_vec <- clust_label_df$base_clust_comp; clusts_int_vec
   p2 <- progressr::progressor(steps = length(clusts_int_vec) * length(feature_names))
-
+  
   diffe_by_clust_df <- map_df(clusts_int_vec, function(ith_cluster) {
     # ith_cluster <- clusts_int_vec[2]
     
@@ -539,7 +619,8 @@ run_diffe <- function(dat, cob, dname) {
       n_non_na_vec2 <- length(c2[!is.na(c2)]); n_non_na_vec2
       
       # if at least 1/3 of the results are missing, then quit
-      if (n_non_na_vec1/c1_length < (1/3) | n_non_na_vec2/c2_length < (1/3)) {
+      # if (n_non_na_vec1/c1_length < (1/3) | n_non_na_vec2/c2_length < (1/3)) {
+      if (n_non_na_vec1 < 1 | n_non_na_vec2 < 1) {
         # message("Not enough data to compute diffe for ", k)
         res <- tibble(
           analyte = k, 
@@ -573,7 +654,7 @@ run_diffe <- function(dat, cob, dname) {
       # quantifies the distance between the empirical distribution of given two samples
       stat <- ks$statistic
       stat_boot <- ks_boot$ks$statistic
-  
+      
       c1_names_df <- matrix_for_diffe %>%
         filter(base_clust_comp == i) %>%
         mutate(
@@ -631,7 +712,7 @@ run_diffe <- function(dat, cob, dname) {
   
   stopifnot(nrow(diffe_by_clust_df) > 0)
   
-  phosphosite_meta <- dat_ %>%
+  phosphosite_meta <- dat_long_filtered %>%
     ungroup() %>%
     dplyr::distinct(pr_gene_symbol, pr_gene_id, mark) %>%
     rename(analyte = pr_gene_symbol)
@@ -836,7 +917,7 @@ plot_diffe_results <- function(args){
       return(r)
     })) %>% 
     filter(keep_); new_sig
-
+  
   groups <- unique(new_main$base_clust_comp_name)
   
   message("Plotting volcano, aligning labels to avoid overlap...")
