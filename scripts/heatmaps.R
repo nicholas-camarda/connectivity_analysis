@@ -688,11 +688,11 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   # get top up and down
   # needs to be relative to 1
   top_up <- row_annots_df %>%
-    filter(fc > 1) %>%
+    filter(fc > 1 & signif) %>%
     arrange(desc(`fc`))
   top_up
   top_down <- row_annots_df %>%
-    filter(fc < 1) %>%
+    filter(fc < 1 & signif) %>%
     # filter(logFC < LOGFC_CUTOFF) %>%
     arrange(desc(`fc`))
   top_down
