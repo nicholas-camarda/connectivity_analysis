@@ -376,7 +376,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
     separate(col = joint, into = c("joint2","replicate_id", "plate_id"), sep = "::") %>%
     separate(col = joint2, into = c("cell_id", "pert_iname","pert_class"), sep = "--")  %>%
     left_join(cluster_ids, by = c("cell_id", "pert_iname"))
-
+  
   reduced_tbl <- reduced_long %>%
     group_by(analytes, cell_id, pert_iname, cluster) %>%
     summarize(median_value = median(value, na.rm = T), .groups = "keep") %>%
@@ -716,70 +716,26 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   
   # edit analyte information when talking about GCP
   if (which_dat == "gcp") {
-    extra_analyte_info_temp <- str_split(extra_analyte_info_init, 
-                                         pattern = "me[0-9]*|ac[0-9]*|ph[0-9]*", 
-                                         simplify = T) %>%
-      as_tibble(.name_repair = "unique") %>%
-      suppressMessages() 
+    
+    # histone_marks_pattern <- "(me[0-9]*)|(ac[0-9]*)|(ph[0-9]*)|(ub[0-9]*)"
+    # 
+    # extra_analyte_info_temp <- str_split(extra_analyte_info_init, 
+    #                                      pattern = histone_marks_pattern, 
+    #                                      simplify = T) %>%
+    #   as_tibble(.name_repair = "unique") %>%
+    #   suppressMessages() 
     
     # this is going to go in the place of analytes for gcp
     mod_table <- tibble(full_sites = extra_analyte_info_init) %>%
-      mutate(s_sites = str_split(extra_analyte_info_init, 
-                                 pattern = "(me[0-9]*)|(ac[0-9]*)|(ph[0-9]*)")) %>%
-      mutate(mods = str_extract_all(string = full_sites, 
-                                    pattern = "(me[0-9]*)|(ac[0-9]*)|(ph[0-9]*)")) %>%
-      mutate(mods_idx = gregexpr(text = full_sites, 
-                                 pattern = "(me[0-9]*)|(ac[0-9]*)|(ph[0-9]*)")) %>%
-      mutate(mod_counts = pmap_chr(list(s_sites, mods, mods_idx), .f = function(s, m, i){
-        # idx = 1
-        # s = mod_table$s_sites[[idx]]; m = mod_table$mods[[idx]]; i = mod_table$mods_idx[[idx]]
-        
-        s <- s[s != ""]
-        
-        diff_i <- tibble(i = i) %>%
-          mutate(spacing = i - min(i),
-                 unit_space = spacing/3,
-                 unit_diff = diff(c(0, unit_space))) %>%
-          mutate(together = ifelse(lead(unit_diff) <= 1 | unit_diff == 1, T, F)) %>%
-          rownames_to_column(var = "id") %>%
-          # group_by(id, together) %>%
-          distinct(id, together) %>%
-          mutate(together = ifelse(is.na(together), F, together)); diff_i
-        
-        if (any(diff_i$together)) {
-          m_ids_df <- tibble(m) %>%
-            rownames_to_column("id") %>%
-            left_join(diff_i, by= "id") %>%
-            group_by(together) %>%
-            # row ids denote the id of the s character vector
-            summarize(marks = str_c(m, collapse = ","),
-                      .groups = "keep") %>%
-            ungroup() %>%
-            dplyr::select(-together); m_ids_df
-          m_ids <- m_ids_df$marks
-          #names(m_ids) <- s
-          
-          res <- tibble(s, m_ids) %>%
-            mutate(cmbd = str_c(s, ": ",  m_ids)) %>%
-            summarize(final_cmbd = str_c(cmbd, collapse = " | ")) %>%
-            .$final_cmbd; res
-        } else {
-          m_ids <- m
-          res <- tibble(s, m_ids) %>%
-            mutate(cmbd = str_c(s, ": ",  m_ids)) %>%
-            summarize(final_cmbd = str_c(cmbd, collapse = " | ")) %>%
-            .$final_cmbd %>%
-            unique(); res
-        }
-        
+      mutate(final_cmbd = map_chr(full_sites, .f = function(str_){
+        res <- gsub(x = gsub("([a-z]+\\d+):", "\\1,",
+                    trimws(gsub("(?<=[a-z][0-9])(?=[A-Z])", " | ", 
+                                gsub("([^a-z]+)", "\\1: ", str_), perl = TRUE), 
+                           whitespace = ":\\s+")), pattern = ":\\s+t", replacement = "t")
         return(res)
       }))
     
-    # this goes in the 'site' column
-    colnames_ <- colnames(extra_analyte_info_temp)
-    extra_analyte_info_df <- extra_analyte_info_temp %>%
-      unite(col = colnames_, sep = "")
-    extra_analyte_info <- extra_analyte_info_df$colnames_
+    extra_analyte_info <- mod_table$final_cmbd
     
   } else {
     # p100 is easy
@@ -803,7 +759,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   if (which_dat == "gcp") {
     analytes_reordered_labels <- row_order_df %>% 
       left_join(mod_table, by = c("analyte" = "full_sites")) %>%
-      mutate(new_analyte_label = mod_counts) %>%
+      mutate(new_analyte_label = final_cmbd) %>%
       .$new_analyte_label
   } else {
     analytes_reordered_labels <- str_split(string = gsub(x = row_order_df$analyte, 
@@ -971,7 +927,7 @@ organize_and_plot_heatmap_subfunction <- function(base_cell_id = NA,
   
   ### ORDER HERE!!! ###
   reordered_mat <- reduced_mat[analytes_reordered, grp_color_df$unique_id, drop = F]
-
+  
   ### insert code for left-annotation here if you want to use it ###
   
   ht_opt$message = FALSE

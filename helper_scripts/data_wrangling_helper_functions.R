@@ -181,7 +181,7 @@ read_and_summarize_data <- function(l, dtype_) {
     theme(axis.text.x = element_text(size = rel(1.5), angle=90, hjust=1, vjust=1)) +
     ggtitle(dtype_) 
   
-  plot_dir <- file.path(output_directory, dtype_, "summary")
+  plot_dir <- file.path(output_directory_temp, dtype_, "summary")
   dir.create(plot_dir, recursive = T, showWarnings = F)
   ggsave(g, filename = file.path(plot_dir, qq("@{dtype_}-gene_values-all.png")),
          width = 20, height = 10)
