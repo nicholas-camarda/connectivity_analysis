@@ -32,7 +32,7 @@ dendro_cut_thresh <- 0.6
 # filter out analytes that are strictly above this threshold
 bh_thresh_val <- 0.1
 
-
+library(GetoptLong)
 message("##############################")
 message(qq("\nLoaded env variables:\nfilter_analytes = @{filter_analytes}\ndendro_cut_thresh = @{dendro_cut_thresh}\nbh_thresh_val = @{bh_thresh_val}\n"))
 message("##############################")

@@ -97,6 +97,16 @@ read_and_summarize_data <- function(l, dtype_) {
   # l <- my_data_lst[[1]]; dtype_ = "GCP"
   # l <- my_data_lst[[2]]; dtype_ = "P100"
   # message(dtype_)
+  
+  # remove duplicate drug entries in master drug sheet based on whether they should be 
+  # corresponding to GCP or P100
+  dup_perts <- drugs_moa_df$pert_iname[duplicated(drugs_moa_df$pert_iname)]
+  dup_perts_to_remove <- drugs_moa_df %>% 
+    filter(pert_iname == dup_perts) %>%
+    mutate(class_match = ifelse(Class == "Epigenetic", "GCP", "P100"), .before = 1) %>%
+    filter(class_match != toupper(dtype_))
+  drugs_moa_df <- drugs_moa_df %>% anti_join(dup_perts_to_remove) %>% suppressMessages()
+  
   res_temp <- data.table::rbindlist(l$data, fill = TRUE, use.names = TRUE) %>%
     as_tibble() %>%
     mutate(which_dat = dtype_) %>%
