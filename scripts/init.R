@@ -37,4 +37,5 @@ message("##############################")
 message(qq("\nLoaded env variables:\nfilter_analytes = @{filter_analytes}\ndendro_cut_thresh = @{dendro_cut_thresh}\nbh_thresh_val = @{bh_thresh_val}\n"))
 message("##############################")
 
+source(file.path("scripts", "load.R"))
 source(file.path("scripts", "connectivity-analysis.R"))

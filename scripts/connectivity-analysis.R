@@ -1,6 +1,3 @@
-# source the init.R file firstso
-source(file.path("scripts", "init.R"))
-
 # analysis apply function
 tic()
 analysis_res <- apply(analysis_dat, 1, function(args) {
@@ -26,7 +23,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     filter(pert_iname %in% my_perts) %>%
     filter(!!sym(grouping_var) %in% filter_vars) %>%
     # if we are excluding perts, make sure this runs
-    filter(!(pert_iname %in% exclude))
+    filter(!(pert_iname %in% exclude)) 
   
   #' print some summary information about filtered obj
   print_helper_info(sub_obj_temp, grouping_var)
@@ -45,11 +42,10 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
     )); dir_name_df
   
   sub_obj <- sub_obj_temp %>%
-    left_join(dir_name_df) %>%
+    left_join(dir_name_df, by = "pert_iname") %>%
     ungroup() %>%
-    dplyr::select(-!!grouping_var) %>%
-    rename(!!grouping_var := new_filter_var) %>%
-    suppressMessages()
+    dplyr::select(-!!sym(grouping_var)) %>%
+    rename(!!sym(grouping_var) := new_filter_var) 
   
   full_splt_lst <- split(sub_obj, f = sub_obj[[sym(grouping_var)]])
   stopifnot(length(full_splt_lst) == length(filter_vars))
