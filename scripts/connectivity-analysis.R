@@ -19,7 +19,7 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   sub_obj_temp <- my_obj %>%
     # non-standard evaluation to find column for group
     # filter for only my_perts that show in both cancer and vascular, 
-    # which is defined in init.R
+    # which is defined in load.R
     filter(pert_iname %in% my_perts) %>%
     filter(!!sym(grouping_var) %in% filter_vars) %>%
     # if we are excluding perts, make sure this runs
@@ -150,9 +150,9 @@ analysis_res <- apply(analysis_dat, 1, function(args) {
   }
   
   # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-main.RData")
-  # load("debug/debug_dat/debug-main.RData")
   # stop()
-  
+  # load("debug/debug_dat/debug-main.RData")
+
   my_heatmap_and_dendro_obj_temp <- res_paths_tbl %>%
     arrange(grouping_var) %>%
     mutate(

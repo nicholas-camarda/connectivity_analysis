@@ -8,7 +8,7 @@ library(ggsci)
 library(ggforce)
 library(ggpubr)
 library(scales)
-library(ggradar)
+library(ggradar) # installed through github, devtools
 
 # colors
 library(RColorBrewer)

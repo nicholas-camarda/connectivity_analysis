@@ -67,7 +67,7 @@ run_corr <- function(x, tie_method = "average") {
   
   x_ungrouped <- x %>%
     ungroup()
-  #
+  
   # stop('debug')
   
   wide_x <- x_ungrouped %>%
@@ -76,7 +76,8 @@ run_corr <- function(x, tie_method = "average") {
       names_from = pr_gene_symbol,
       values_from = value,
       values_fn = median
-    )
+    ) %>%
+    filter(!is.na(replicate_id))
   wide_x
   
   transposed_x <- wide_x %>%
@@ -88,7 +89,9 @@ run_corr <- function(x, tie_method = "average") {
   
   # data has been log transformed, so must be spearman bc rho doesn't
   # change with monotonic transfromation; pearson DOES!
+  tic()
   res <- cor(transposed_x, method = "spearman", use = "pairwise.complete.obs")
+  toc()
   
   rownames(res) <- wide_x$replicate_id
   colnames(res) <- wide_x$replicate_id
@@ -145,7 +148,8 @@ calc_conn_by_median <- function(m) {
       v1 <- m[i, j]
       v2 <- m[j, i]
       median_val <- median(c(v1, v2))
-      new_df <- tibble(group_a = n1, group_b = n2, conn = median_val)
+      new_df <- tibble(group_a = n1, group_b = n2, 
+                       conn = median_val)
       df <- bind_rows(df, new_df)
     }
   }
@@ -153,15 +157,18 @@ calc_conn_by_median <- function(m) {
   return(symm_med_m)
 }
 
-#' @note compute for cell A vs cell B and cell B vs all others (not B)
+#' @note compute for cell A vs cell B and cell B vs all others (not A or B)
 #' @param a character identifier for 'group a'
 #' @param b character identifier for 'group b'
+#' @param my_mat matrix of correlations among replicates
+#' @param my_tib data.frame denoting the cell (i.e. group name) identities of all replicates and their respective indices
 #' @param use_bootstrap logical to calculate boostrapped p-value for the ks.test
 calc_conn <- function(a, b, my_mat, my_tib, use_bootstrap = FALSE) {
   # a <- looper$group_a[5];
   # b <- looper$group_b[5]
-  # my_mat = mat;  my_tib = cs_tib
-  # message(a,b)
+  # my_mat = mat
+  # my_mat = cor_dat;  my_tib = cs_tib
+  # message(a,"    ", b)
   # A vs B
   grp_col_idx_a <- my_tib %>%
     filter(grp_names == a) %>%
@@ -177,7 +184,6 @@ calc_conn <- function(a, b, my_mat, my_tib, use_bootstrap = FALSE) {
   grp_col_idx_all <- my_tib %>%
     filter(!(grp_names %in% c(a, b))) %>%
     .$cs_idx
-  
   
   test <- my_mat[grp_col_idx_a, grp_col_idx_b]
   bkg <- my_mat[grp_col_idx_b, grp_col_idx_all]
@@ -199,7 +205,50 @@ calc_conn <- function(a, b, my_mat, my_tib, use_bootstrap = FALSE) {
     connectivity <- -1 * connectivity
   }
   
-  conn_sub_obj <- tibble(conn = connectivity, p_val = p_val)
+  conn_sub_obj <- tibble(group_a = a, group_b = b, conn = connectivity, p_val = p_val)
+  return(conn_sub_obj)
+}
+
+#' @note compute for cell A replicate vs cell B replicate and cell B replicate vs all other replicates (neither A nor B replicates)
+#' @param a character identifier for 'replicate a'
+#' @param b character identifier for 'replicate b'
+#' @param my_mat matrix of correlations among replicates
+#' @param my_tib data.frame denoting the cell (i.e. group name) identities of all replicates and their respective indices
+#' @param use_bootstrap logical to calculate boostrapped p-value for the ks.test
+calc_conn_replicates <- function(a, b, my_mat, my_tib, use_bootstrap = FALSE) {
+  # a <- looper$rep_a[1];
+  # b <- looper$rep_b[1]
+  # my_mat = cor_dat;  my_tib = cs_tib
+  # message(a,"    ", b)
+  # A vs B
+  grp_col_idx_a <- my_tib %>%
+    filter(g_cell_pert_ == a) %>%
+    .$cs_idx
+  grp_col_idx_b <- my_tib %>%
+    filter(g_cell_pert_ == b) %>%
+    .$cs_idx
+  
+  # B vs all (except itself)
+  grp_col_idx_b <- my_tib %>%
+    filter(g_cell_pert_ == b) %>%
+    .$cs_idx
+  grp_col_idx_all <- my_tib %>%
+    filter(!(g_cell_pert_ %in% c(a, b))) %>%
+    .$cs_idx
+  
+  test <- my_mat[grp_col_idx_a, grp_col_idx_b, drop = F];   dim(test)
+  bkg <- my_mat[grp_col_idx_b, grp_col_idx_all, drop = F];   dim(bkg)
+  
+  if (use_bootstrap) message("Bootstrap is deprecated. Not using bootstrap.")
+  
+  res <- ks.test(test, bkg, alternative = "two.sided")
+  connectivity <- res$statistic
+  p_val <- res$p.value
+  
+  if (median(test, na.rm = T) < median(bkg, na.rm = T)) {
+    connectivity <- -1 * connectivity
+  }
+  conn_sub_obj <- tibble(group_a = a, group_b = b, connectivity, p_val)
   return(conn_sub_obj)
 }
 
@@ -222,6 +271,9 @@ run_conn <- function(mat, use_bootstrap = FALSE) {
   )
   
   if (use_bootstrap) message("Using ks.boot")
+  # connectivity calculated per cell "group" 
+  # cell A vs cell B, cell B vs cell B, cell C vs cell B, etc
+  # using the correlation among replicates
   conn_df <- looper %>%
     mutate(map2_df(
       .x = group_a, .y = group_b,
@@ -230,7 +282,7 @@ run_conn <- function(mat, use_bootstrap = FALSE) {
       use_bootstrap = use_bootstrap
     )) %>%
     as_tibble()
-  
+  # take median because "cell A vs cell B" is not the same as "cell B vs cell A"
   median_mat <- calc_conn_by_median(conn_df)
   rnames <- rownames(median_mat)
   # stop("debug")
@@ -243,11 +295,10 @@ run_conn <- function(mat, use_bootstrap = FALSE) {
       names_to = "group_b", values_to = "median_conn"
     )
   
-  
   return(list(
     "conn_tbl" = conn_df,
     "conn_median_mat" = median_mat,
-    "conn_tbl_median" = conn_tbl_median
+    "conn_tbl_median" = conn_tbl_median # this is used for downstream analysis
   ))
 }
 
