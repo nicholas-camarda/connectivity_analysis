@@ -204,6 +204,26 @@ if (!file.exists(obj_final_fn)) {
 all_data <- bind_rows(my_data_obj_final$data) %>%
   ungroup()
 
+# get abbreviations of the replicates in there
+# all_data <- lapply(my_data_obj_final$data, FUN = function(d){
+#   # d <- my_data_obj_final$data[[1]]
+#   res <- d %>%
+#     dplyr::select(replicate_id, pr_gene_symbol, value) %>%
+#     pivot_wider(id_cols = replicate_id, 
+#                 names_from = pr_gene_symbol, 
+#                 values_from = value, 
+#                 values_fn = function(x) median(x, na.rm = TRUE))
+#   res_d <- res %>%
+#     dplyr::select(replicate_id) %>%
+#     mutate(pert_iname = str_split(replicate_id, "--", simplify = TRUE)[,2]) %>%
+#     mutate(abbrev_replicate_id = make.unique(str_c(str_split(replicate_id, "--", simplify = TRUE)[,1], pert_iname, sep = "-")))
+# 
+#   final_d <- left_join(d, res_d, by = c("replicate_id", "pert_iname")) %>%
+#     dplyr::select(master_id, replicate_id, abbrev_replicate_id, everything())
+#   return(final_d)
+# }) %>%
+#   bind_rows()
+
 # run get_drugs.R first to generate the appropriate files in the appropriate place!
 pert_fn <- file.path(data_directory, "perturbation_data", "my_perts.rds")
 if (file.exists(pert_fn)) {
@@ -211,7 +231,7 @@ if (file.exists(pert_fn)) {
   my_perts_df <- read_rds(pert_fn)
   message("Done.\n")
 } else {
-  message("Couldn't find my_perts_df... preparing for conditions Epigenetic")
+  message("Couldn't find my_perts_df... preparing for conditions")
   
   ### apply functions and get output ---
   p100_perts <- get_analysis_perturbations(data_ = all_data, dataset_type = "P100")

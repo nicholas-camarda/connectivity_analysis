@@ -70,18 +70,19 @@ run_corr <- function(x, tie_method = "average") {
   
   # stop('debug')
   
+  # change this abbrev_replicate_id back to replicate_id if you want the full replicate name
   wide_x <- x_ungrouped %>%
-    dplyr::select(replicate_id, pr_gene_symbol, value) %>%
+    dplyr::select(abbrev_replicate_id, pr_gene_symbol, value) %>%
     pivot_wider(
       names_from = pr_gene_symbol,
       values_from = value,
       values_fn = median
     ) %>%
-    filter(!is.na(replicate_id))
+    filter(!is.na(abbrev_replicate_id))
   wide_x
   
   transposed_x <- wide_x %>%
-    dplyr::select(-replicate_id) %>%
+    dplyr::select(-abbrev_replicate_id) %>%
     t() %>%
     # unnaming the large matrix results
     # in massive performance upgrade
@@ -93,18 +94,18 @@ run_corr <- function(x, tie_method = "average") {
   res <- cor(transposed_x, method = "spearman", use = "pairwise.complete.obs")
   toc()
   
-  rownames(res) <- wide_x$replicate_id
-  colnames(res) <- wide_x$replicate_id
+  rownames(res) <- wide_x$abbrev_replicate_id
+  colnames(res) <- wide_x$abbrev_replicate_id
   
   res_final1 <- res %>%
     as.data.frame() %>%
     rownames_to_column() %>%
     as_tibble()
   
-  colnames(res_final1) <- c("unique_id_a", wide_x$replicate_id)
+  colnames(res_final1) <- c("unique_id_a", wide_x$abbrev_replicate_id)
   
   look_up_df <- x_ungrouped %>%
-    distinct(master_id, replicate_id)
+    distinct(master_id, abbrev_replicate_id)
   
   res_final2 <- res_final1 %>%
     pivot_longer(
@@ -112,11 +113,11 @@ run_corr <- function(x, tie_method = "average") {
       names_to = "unique_id_b", values_to = "corr"
     ) %>%
     right_join(look_up_df %>%
-                 dplyr::rename(group_a = master_id, unique_id_a = replicate_id),
+                 dplyr::rename(group_a = master_id, unique_id_a = abbrev_replicate_id),
                by = "unique_id_a"
     ) %>%
     right_join(look_up_df %>%
-                 dplyr::rename(group_b = master_id, unique_id_b = replicate_id),
+                 dplyr::rename(group_b = master_id, unique_id_b = abbrev_replicate_id),
                by = "unique_id_b"
     )
   return(list("matrix" = res, "tibble" = res_final2))
@@ -170,6 +171,7 @@ calc_conn <- function(a, b, my_mat, my_tib, use_bootstrap = FALSE) {
   # my_mat = cor_dat;  my_tib = cs_tib
   # message(a,"    ", b)
   # A vs B
+  # stop()
   grp_col_idx_a <- my_tib %>%
     filter(grp_names == a) %>%
     .$cs_idx

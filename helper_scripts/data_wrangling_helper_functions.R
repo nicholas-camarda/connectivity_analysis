@@ -180,12 +180,28 @@ read_and_summarize_data <- function(l, dtype_) {
     
   }
   
+  res_mat_temp <- res %>%
+    dplyr::select(replicate_id, pr_gene_symbol, value) %>%
+    pivot_wider(id_cols = replicate_id, 
+                names_from = pr_gene_symbol, 
+                values_from = value, 
+                values_fn = function(x) median(x, na.rm = TRUE))
+  res_temp_final_helper <- res_mat_temp %>%
+    dplyr::select(replicate_id) %>%
+    mutate(pert_iname = str_split(replicate_id, "--", simplify = TRUE)[,2]) %>%
+    mutate(abbrev_replicate_id = make.unique(str_c(str_split(replicate_id, "--", simplify = TRUE)[,1], pert_iname, sep = "--"))) %>%
+    distinct()
+  
+  final_d <- left_join(res, res_temp_final_helper, by = c("replicate_id", "pert_iname")) %>%
+    dplyr::select(master_id, replicate_id, abbrev_replicate_id, everything())
+  
+  stopifnot(identical(dim(res)[1], dim(final_d)[1]))
   # save(list = ls(all.names = TRUE), file = "debug/debug_dat/debug-summary.RData")
   # load("debug/debug_dat/debug-summary.RData")
   # stop()
   
   message("Plotting summary data across pr_gene_symbol...")
-  g <- ggplot(res) +
+  g <- ggplot(final_d) +
     geom_boxplot(aes(x=pr_gene_symbol, y=value)) + # 
     theme_bw(base_size = 7) +
     theme(axis.text.x = element_text(size = rel(1.5), angle=90, hjust=1, vjust=1)) +
@@ -196,7 +212,7 @@ read_and_summarize_data <- function(l, dtype_) {
   ggsave(g, filename = file.path(plot_dir, qq("@{dtype_}-gene_values-all.png")),
          width = 20, height = 10)
   
-  return(res)
+  return(final_d)
 }
 
 
